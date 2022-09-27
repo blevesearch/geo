@@ -56,17 +56,13 @@ func polylineIntersectsPolygons(pls []*s2.Polyline,
 	for _, pl := range pls {
 		for _, s2pgn := range s2pgns {
 			for i := 0; i < pl.NumEdges(); i++ {
-				edge := pl.Edge(i)
-				a := []float64{edge.V0.X, edge.V0.Y}
-				b := []float64{edge.V1.X, edge.V1.Y}
-
 				for i := 0; i < s2pgn.NumEdges(); i++ {
 					edgeB := s2pgn.Edge(i)
+					latLng1 := s2.LatLngFromPoint(edgeB.V0)
+					latLng2 := s2.LatLngFromPoint(edgeB.V1)
+					pgnLine := s2.PolylineFromLatLngs([]s2.LatLng{latLng1, latLng2})
 
-					c := []float64{edgeB.V0.X, edgeB.V0.Y}
-					d := []float64{edgeB.V1.X, edgeB.V1.Y}
-
-					if doIntersect(a, b, c, d) {
+					if pl.Intersects(pgnLine) {
 						return true
 					}
 				}
