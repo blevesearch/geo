@@ -29,11 +29,12 @@ var jsoniter = jsoniterator.ConfigCompatibleWithStandardLibrary
 
 // FilterGeoShapesOnRelation extracts the shapes in the document, apply
 // the `relation` filter and confirms whether the shape in the document
-//  satisfies the given relation.
+//
+//	satisfies the given relation.
 func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
-	relation string, reader **bytes.Reader) (bool, error) {
+	relation string, reader **bytes.Reader, bufPool *[][]byte) (bool, error) {
 
-	shapeInDoc, err := extractShapesFromBytes(targetShapeBytes, reader)
+	shapeInDoc, err := extractShapesFromBytes(targetShapeBytes, reader, bufPool)
 	if err != nil {
 		return false, err
 	}
@@ -43,7 +44,7 @@ func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
 
 // extractShapesFromBytes unmarshal the bytes to retrieve the
 // embedded geojson shape.
-func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader) (
+func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *[][]byte) (
 	index.GeoJSON, error) {
 	if (*r) == nil {
 		*r = bytes.NewReader(targetShapeBytes[1:])
@@ -109,7 +110,7 @@ func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader) (
 		return mls, nil
 
 	case PolygonTypePrefix:
-		pgn := &Polygon{s2pgn: &s2.Polygon{}}
+		pgn := &Polygon{s2pgn: &s2.Polygon{BufPool: bufPool}}
 		err := pgn.s2pgn.Decode(*r)
 		if err != nil {
 			return nil, err
@@ -156,7 +157,7 @@ func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader) (
 		gc := &GeometryCollection{Shapes: make([]index.GeoJSON, numShapes)}
 
 		for i := int32(0); i < numShapes; i++ {
-			shape, err := extractShapesFromBytes(inputBytes[:lengths[i]], r)
+			shape, err := extractShapesFromBytes(inputBytes[:lengths[i]], r, nil)
 			if err != nil {
 				return nil, err
 			}
