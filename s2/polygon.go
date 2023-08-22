@@ -38,16 +38,16 @@ import (
 //
 // Polygons have the following restrictions:
 //
-//   - Loops may not cross, i.e. the boundary of a loop may not intersect
-//     both the interior and exterior of any other loop.
+//  - Loops may not cross, i.e. the boundary of a loop may not intersect
+//    both the interior and exterior of any other loop.
 //
-//   - Loops may not share edges, i.e. if a loop contains an edge AB, then
-//     no other loop may contain AB or BA.
+//  - Loops may not share edges, i.e. if a loop contains an edge AB, then
+//    no other loop may contain AB or BA.
 //
-//   - Loops may share vertices, however no vertex may appear twice in a
-//     single loop (see Loop).
+//  - Loops may share vertices, however no vertex may appear twice in a
+//    single loop (see Loop).
 //
-//   - No loop may be empty. The full loop may appear only in the full polygon.
+//  - No loop may be empty. The full loop may appear only in the full polygon.
 type Polygon struct {
 	loops []*Loop
 
@@ -78,7 +78,7 @@ type Polygon struct {
 	// have a large number of loops, and may be empty for polygons with few loops.
 	cumulativeEdges []int
 
-	BufPool *[][]byte
+	BufPool [][]byte
 }
 
 // PolygonFromLoops constructs a polygon from the given set of loops. The polygon
