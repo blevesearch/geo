@@ -78,7 +78,8 @@ type Polygon struct {
 	// have a large number of loops, and may be empty for polygons with few loops.
 	cumulativeEdges []int
 
-	BufPool [][]byte
+	// A buffer pool to be used while decoding the polygon
+	BufPool *GeoBufferPool
 }
 
 // PolygonFromLoops constructs a polygon from the given set of loops. The polygon
@@ -1153,7 +1154,7 @@ func (p *Polygon) decode(d *decoder) {
 	p.loops = make([]*Loop, nloops)
 	for i := range p.loops {
 		p.loops[i] = new(Loop)
-		p.loops[i].polygon = p
+		p.loops[i].BufPool = p.BufPool
 		p.loops[i].decode(d)
 		p.numVertices += len(p.loops[i].vertices)
 	}

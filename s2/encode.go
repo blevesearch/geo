@@ -223,21 +223,12 @@ func (d *decoder) readUvarint() (x uint64) {
 	return
 }
 
-func (d *decoder) readFloat64Array(size int, buffers [][]byte) ([]byte, int) {
-	if d.err != nil {
+func (d *decoder) readFloat64Array(size int, buf []byte) ([]byte, int) {
+	if d.err != nil || buf == nil {
 		return nil, 0
-	}
-
-	var buf []byte
-
-	for _, buffer := range buffers {
-		if len(buffer) <= size*8 {
-			buf = buffer
-			break
-		}
 	}
 
 	_, d.err = io.ReadFull(d.r, buf)
 
-	return buf, len(buf) / 8
+	return buf, len(buf)
 }

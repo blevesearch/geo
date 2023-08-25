@@ -46,7 +46,6 @@ import (
 type Loop struct {
 	vertices []Point
 
-	polygon *Polygon
 	// originInside keeps a precomputed value whether this loop contains the origin
 	// versus computing from the set of vertices every time.
 	originInside bool
@@ -68,6 +67,9 @@ type Loop struct {
 
 	// index is the spatial index for this Loop.
 	index *ShapeIndex
+
+	// A buffer pool to be used while decoding the polygon
+	BufPool *GeoBufferPool
 }
 
 // LoopFromPoints constructs a loop from the given points.
@@ -1290,23 +1292,28 @@ func (l *Loop) decode(d *decoder) {
 	}
 	l.vertices = make([]Point, nvertices)
 
-	pointsNeeded := int(nvertices) * 3
+	// Each vertex requires 24 bytes of storage
+	numBytesNeeded := int(nvertices) * 24
 
 	i := 0
 
-	for pointsNeeded > 0 {
-		arr, pointsRead := d.readFloat64Array(pointsNeeded, l.polygon.BufPool)
-		if pointsRead == 0 {
+	for numBytesNeeded > 0 {
+		arr := l.BufPool.Get(numBytesNeeded)
+		arr, numBytesRead := d.readFloat64Array(numBytesNeeded, arr)
+
+		if numBytesRead == 0 {
 			break
 		}
-		pointsNeeded = pointsNeeded - pointsRead
-		for j := 0; j < int(pointsRead/3); j++ {
+
+		numBytesNeeded = numBytesNeeded - numBytesRead 
+
+		for j := 0; j < int(numBytesRead/24); j++ {
 			l.vertices[i+j].X = math.Float64frombits(binary.LittleEndian.Uint64(arr[8*(j*3) : 8*(j*3+1)]))
 			l.vertices[i+j].Y = math.Float64frombits(binary.LittleEndian.Uint64(arr[8*(j*3+1) : 8*(j*3+2)]))
 			l.vertices[i+j].Z = math.Float64frombits(binary.LittleEndian.Uint64(arr[8*(j*3+2) : 8*(j*3+3)]))
 		}
 
-		i = i + int(pointsRead/3)
+		i = i + int(numBytesRead/24)
 	}
 
 	l.index = NewShapeIndex()

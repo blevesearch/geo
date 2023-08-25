@@ -31,7 +31,7 @@ var jsoniter = jsoniterator.ConfigCompatibleWithStandardLibrary
 // the `relation` filter and confirms whether the shape in the document
 //  satisfies the given relation.
 func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
-	relation string, reader **bytes.Reader, bufPool [][]byte) (bool, error) {
+	relation string, reader **bytes.Reader, bufPool *s2.GeoBufferPool) (bool, error) {
 
 	shapeInDoc, err := extractShapesFromBytes(targetShapeBytes, reader, bufPool)
 	if err != nil {
@@ -43,7 +43,7 @@ func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
 
 // extractShapesFromBytes unmarshal the bytes to retrieve the
 // embedded geojson shape.
-func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool [][]byte) (
+func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *s2.GeoBufferPool) (
 	index.GeoJSON, error) {
 	if (*r) == nil {
 		*r = bytes.NewReader(targetShapeBytes[1:])
