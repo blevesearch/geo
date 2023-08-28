@@ -25,8 +25,6 @@ type GeoBufferPool struct {
 }
 
 func NewGeoBufferPool(maxSize int, minSize int) *GeoBufferPool {
-
-
 	// Calculating the number of buffers required. Assuming that
 	// the value of minSize is correct, the buffers will be of size
 	// minSize, 2 * minSize, 4 * minSize and so on till it is less
@@ -48,12 +46,14 @@ func NewGeoBufferPool(maxSize int, minSize int) *GeoBufferPool {
 }
 
 func (b *GeoBufferPool) Get(size int) ([]byte) {
-
 	bufSize := b.maxSize
 
 	for i := range b.buffers {
 		if bufSize <= size {
-			b.buffers[i] = make([]byte, bufSize)
+			if b.buffers[i] == nil {
+				b.buffers[i] = make([]byte, bufSize)
+			} 
+
 			return b.buffers[i]
 		} else {
 			bufSize = bufSize / 2
