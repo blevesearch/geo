@@ -46,17 +46,17 @@ func NewGeoBufferPool(maxSize int, minSize int) *GeoBufferPool {
 }
 
 func (b *GeoBufferPool) Get(size int) ([]byte) {
-	bufSize := b.maxSize
+	bufSize := b.minSize
 
 	for i := range b.buffers {
-		if bufSize <= size {
+		if size <= bufSize || i == len(b.buffers) - 1{
 			if b.buffers[i] == nil {
 				b.buffers[i] = make([]byte, bufSize)
-			} 
+			}
 
 			return b.buffers[i]
 		} else {
-			bufSize = bufSize / 2
+			bufSize = bufSize * 2
 		}
 	}
 

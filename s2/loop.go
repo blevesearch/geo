@@ -1301,7 +1301,7 @@ func (l *Loop) decode(d *decoder) {
 
 	for numBytesNeeded > 0 {
 		arr := l.BufPool.Get(numBytesNeeded)
-		arr, numBytesRead := d.readFloat64Array(numBytesNeeded, arr)
+		numBytesRead := d.readFloat64Array(numBytesNeeded, arr)
 
 		if numBytesRead == 0 {
 			break
