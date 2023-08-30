@@ -15,6 +15,7 @@
 package s2
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -23,6 +24,9 @@ import (
 	"github.com/golang/geo/r3"
 	"github.com/golang/geo/s1"
 )
+
+const SizeOfFloat = 8
+const SizeOfVertex = 3 * SizeOfFloat
 
 // Loop represents a simple spherical polygon. It consists of a sequence
 // of vertices where the first vertex is implicitly connected to the
@@ -66,6 +70,9 @@ type Loop struct {
 
 	// index is the spatial index for this Loop.
 	index *ShapeIndex
+
+	// A buffer pool to be used while decoding the polygon
+	BufPool *GeoBufferPool
 }
 
 // LoopFromPoints constructs a loop from the given points.
@@ -1287,11 +1294,34 @@ func (l *Loop) decode(d *decoder) {
 		return
 	}
 	l.vertices = make([]Point, nvertices)
-	for i := range l.vertices {
-		l.vertices[i].X = d.readFloat64()
-		l.vertices[i].Y = d.readFloat64()
-		l.vertices[i].Z = d.readFloat64()
+
+	// Each vertex requires 24 bytes of storage
+	numBytesNeeded := int(nvertices) * SizeOfVertex
+
+	i := 0
+
+	for numBytesNeeded > 0 {
+		arr := l.BufPool.Get(numBytesNeeded)
+		numBytesRead := d.readFloat64Array(numBytesNeeded, arr)
+
+		if numBytesRead == 0 {
+			break
+		}
+
+		numBytesNeeded = numBytesNeeded - numBytesRead 
+
+		// Parsing one vertex at a time into the vertex array of the loop
+		// by going through the buffer in steps of SizeOfVertex and converting
+		// floatSize worth of bytes into the float values
+		for j := 0; j < int(numBytesRead/SizeOfVertex); j++ {
+			l.vertices[i+j].X = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3) : SizeOfFloat*(j*3+1)]))
+			l.vertices[i+j].Y = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3+1) : SizeOfFloat*(j*3+2)]))
+			l.vertices[i+j].Z = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3+2) : SizeOfFloat*(j*3+3)]))
+		}
+
+		i = i + int(numBytesRead/SizeOfVertex)
 	}
+
 	l.index = NewShapeIndex()
 	l.originInside = d.readBool()
 	l.depth = int(d.readUint32())
