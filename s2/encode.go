@@ -231,8 +231,8 @@ func (d *decoder) readFloat64Array(size int, buf []byte) int {
 	if size >= len(buf) {
 		_, d.err = io.ReadFull(d.r, buf)
 		return len(buf)
-	} else {
-		_, d.err = io.ReadFull(d.r, buf[0:size])
-		return size
 	}
+
+	_, d.err = io.ReadFull(d.r, buf[0:size])
+	return size
 }

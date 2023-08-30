@@ -19,14 +19,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 
 	"github.com/golang/geo/r1"
 	"github.com/golang/geo/r3"
 	"github.com/golang/geo/s1"
 )
-
-const SizeOfFloat = 8
-const SizeOfVertex = 3 * SizeOfFloat
 
 // Loop represents a simple spherical polygon. It consists of a sequence
 // of vertices where the first vertex is implicitly connected to the
@@ -1265,6 +1263,15 @@ func (l Loop) encode(e *encoder) {
 	l.bound.encode(e)
 }
 
+func init() {
+	var f64 float64
+	sizeOfFloat64 = int(reflect.TypeOf(f64).Size())
+	sizeOfVertex = 3 * sizeOfFloat64
+}
+
+var sizeOfFloat64 int
+var sizeOfVertex int
+
 // Decode decodes a loop.
 func (l *Loop) Decode(r io.Reader) error {
 	*l = Loop{}
@@ -1296,7 +1303,7 @@ func (l *Loop) decode(d *decoder) {
 	l.vertices = make([]Point, nvertices)
 
 	// Each vertex requires 24 bytes of storage
-	numBytesNeeded := int(nvertices) * SizeOfVertex
+	numBytesNeeded := int(nvertices) * sizeOfVertex
 
 	i := 0
 
@@ -1308,18 +1315,21 @@ func (l *Loop) decode(d *decoder) {
 			break
 		}
 
-		numBytesNeeded = numBytesNeeded - numBytesRead 
+		numBytesNeeded -= numBytesRead
 
 		// Parsing one vertex at a time into the vertex array of the loop
-		// by going through the buffer in steps of SizeOfVertex and converting
+		// by going through the buffer in steps of sizeOfVertex and converting
 		// floatSize worth of bytes into the float values
-		for j := 0; j < int(numBytesRead/SizeOfVertex); j++ {
-			l.vertices[i+j].X = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3) : SizeOfFloat*(j*3+1)]))
-			l.vertices[i+j].Y = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3+1) : SizeOfFloat*(j*3+2)]))
-			l.vertices[i+j].Z = math.Float64frombits(binary.LittleEndian.Uint64(arr[SizeOfFloat*(j*3+2) : SizeOfFloat*(j*3+3)]))
+		for j := 0; j < int(numBytesRead/sizeOfVertex); j++ {
+			l.vertices[i+j].X = math.Float64frombits(
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3) : sizeOfFloat64*(j*3+1)]))
+			l.vertices[i+j].Y = math.Float64frombits(
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3+1) : sizeOfFloat64*(j*3+2)]))
+			l.vertices[i+j].Z = math.Float64frombits(
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3+2) : sizeOfFloat64*(j*3+3)]))
 		}
 
-		i = i + int(numBytesRead/SizeOfVertex)
+		i += int(numBytesRead/sizeOfVertex)
 	}
 
 	l.index = NewShapeIndex()
