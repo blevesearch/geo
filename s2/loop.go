@@ -1265,12 +1265,12 @@ func (l Loop) encode(e *encoder) {
 
 func init() {
 	var f64 float64
-	SizeOfFloat64 = int(reflect.TypeOf(f64).Size())
-	SizeOfVertex = 3 * SizeOfFloat64
+	sizeOfFloat64 = int(reflect.TypeOf(f64).Size())
+	sizeOfVertex = 3 * sizeOfFloat64
 }
 
-var SizeOfFloat64 int
-var SizeOfVertex int
+var sizeOfFloat64 int
+var sizeOfVertex int
 
 // Decode decodes a loop.
 func (l *Loop) Decode(r io.Reader) error {
@@ -1303,7 +1303,7 @@ func (l *Loop) decode(d *decoder) {
 	l.vertices = make([]Point, nvertices)
 
 	// Each vertex requires 24 bytes of storage
-	numBytesNeeded := int(nvertices) * SizeOfVertex
+	numBytesNeeded := int(nvertices) * sizeOfVertex
 
 	i := 0
 
@@ -1318,18 +1318,18 @@ func (l *Loop) decode(d *decoder) {
 		numBytesNeeded -= numBytesRead
 
 		// Parsing one vertex at a time into the vertex array of the loop
-		// by going through the buffer in steps of SizeOfVertex and converting
+		// by going through the buffer in steps of sizeOfVertex and converting
 		// floatSize worth of bytes into the float values
-		for j := 0; j < int(numBytesRead/SizeOfVertex); j++ {
+		for j := 0; j < int(numBytesRead/sizeOfVertex); j++ {
 			l.vertices[i+j].X = math.Float64frombits(
-				binary.LittleEndian.Uint64(arr[SizeOfFloat64*(j*3) : SizeOfFloat64*(j*3+1)]))
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3) : sizeOfFloat64*(j*3+1)]))
 			l.vertices[i+j].Y = math.Float64frombits(
-				binary.LittleEndian.Uint64(arr[SizeOfFloat64*(j*3+1) : SizeOfFloat64*(j*3+2)]))
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3+1) : sizeOfFloat64*(j*3+2)]))
 			l.vertices[i+j].Z = math.Float64frombits(
-				binary.LittleEndian.Uint64(arr[SizeOfFloat64*(j*3+2) : SizeOfFloat64*(j*3+3)]))
+				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3+2) : sizeOfFloat64*(j*3+3)]))
 		}
 
-		i += int(numBytesRead/SizeOfVertex)
+		i += int(numBytesRead/sizeOfVertex)
 	}
 
 	l.index = NewShapeIndex()
