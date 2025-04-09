@@ -125,16 +125,14 @@ func (p *Point) Marshal() ([]byte, error) {
 
 func (p *Point) Intersects(other index.GeoJSON) (bool, error) {
 	p.init()
-	s2cell := s2.CellFromPoint(*p.s2point)
 
-	return checkCellIntersectsShape(&s2cell, p, other)
+	return checkPointIntersectsShape(p.s2point, p, other)
 }
 
 func (p *Point) Contains(other index.GeoJSON) (bool, error) {
 	p.init()
-	s2cell := s2.CellFromPoint(*p.s2point)
 
-	return checkCellContainsShape([]*s2.Cell{&s2cell}, other)
+	return checkPointContainsShape([]*s2.Point{p.s2point}, other)
 }
 
 func (p *Point) Coordinates() []float64 {
@@ -205,8 +203,7 @@ func (p *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {
 	p.init()
 
 	for _, s2point := range p.s2points {
-		cell := s2.CellFromPoint(*s2point)
-		rv, err := checkCellIntersectsShape(&cell, p, other)
+		rv, err := checkPointIntersectsShape(s2point, p, other)
 		if rv && err == nil {
 			return rv, nil
 		}
@@ -217,14 +214,13 @@ func (p *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {
 
 func (p *MultiPoint) Contains(other index.GeoJSON) (bool, error) {
 	p.init()
-	s2cells := make([]*s2.Cell, 0, len(p.s2points))
 
-	for _, s2point := range p.s2points {
-		cell := s2.CellFromPoint(*s2point)
-		s2cells = append(s2cells, &cell)
+	rv, err := checkPointContainsShape(p.s2points, other)
+	if rv && err == nil {
+		return rv, nil
 	}
 
-	return checkCellContainsShape(s2cells, other)
+	return false, nil
 }
 
 func (p *MultiPoint) Coordinates() [][]float64 {
@@ -760,11 +756,15 @@ func NewGeoCircle(points []float64,
 	if err != nil {
 		return nil
 	}
-
-	return &Circle{Typ: CircleType,
+	rv := &Circle{
+		Typ:            CircleType,
 		Vertices:       points,
 		Radius:         radius,
-		radiusInMeters: r}
+		radiusInMeters: r,
+	}
+	rv.init()
+
+	return rv
 }
 
 func (c *Circle) Type() string {
@@ -838,7 +838,10 @@ type Envelope struct {
 }
 
 func NewGeoEnvelope(points [][]float64) index.GeoJSON {
-	return &Envelope{Vertices: points, Typ: EnvelopeType}
+	rv := &Envelope{Vertices: points, Typ: EnvelopeType}
+	rv.init()
+
+	return rv
 }
 
 func (e *Envelope) Type() string {
@@ -884,15 +887,13 @@ func (e *Envelope) Contains(other index.GeoJSON) (bool, error) {
 
 //--------------------------------------------------------
 
-// checkCellIntersectsShape checks for intersection between
-// the s2cell and the shape in the document.
-func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
-	other index.GeoJSON) (bool, error) {
+// checkPointIntersectsShape checks for intersection between
+// the point and the shape in the document.
+func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		s2cell := s2.CellFromPoint(*p2.s2point)
-
-		if cell.IntersectsCell(s2cell) {
+		// Check if the points are equal
+		if point.ApproxEqual(*p2.s2point) {
 			return true, nil
 		}
 
@@ -901,11 +902,9 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is a multipoint.
 	if p2, ok := other.(*MultiPoint); ok {
-		// check the intersection for any point in the array.
-		for _, point := range p2.s2points {
-			s2cell := s2.CellFromPoint(*point)
-
-			if cell.IntersectsCell(s2cell) {
+		// check if any of the points are equal
+		for _, p := range p2.s2points {
+			if point.ApproxEqual(*p) {
 				return true, nil
 			}
 		}
@@ -915,8 +914,12 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is a polygon.
 	if p2, ok := other.(*Polygon); ok {
-
-		if p2.s2pgn.IntersectsCell(*cell) {
+		// check if the point is contained within the polygon.
+		// polygon contains point will consider vertices to be outside
+		// so we create a shape index and query it instead
+		idx := s2.NewShapeIndex()
+		idx.Add(p2.s2pgn)
+		if s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point) {
 			return true, nil
 		}
 
@@ -925,12 +928,15 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is a multipolygon.
 	if p2, ok := other.(*MultiPolygon); ok {
-		// check the intersection for any polygon in the collection.
+		// check if the point is contained within any of the polygons
+		// polygon contains point will consider vertices to be outside
+		// so we create a shape index and query it instead
+		idx := s2.NewShapeIndex()
 		for _, s2pgn := range p2.s2pgns {
-
-			if s2pgn.IntersectsCell(*cell) {
-				return true, nil
-			}
+			idx.Add(s2pgn)
+		}
+		if s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point) {
+			return true, nil
 		}
 
 		return false, nil
@@ -938,13 +944,11 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is a linestring.
 	if p2, ok := other.(*LineString); ok {
-		for i := 0; i < p2.pl.NumEdges(); i++ {
-			edge := p2.pl.Edge(i)
-			start := s2.CellFromPoint(edge.V0)
-			end := s2.CellFromPoint(edge.V1)
-			if cell.IntersectsCell(start) || cell.IntersectsCell(end) {
-				return true, nil
-			}
+		// project the point to the linestring and check if
+		// the projection is equal to the point.
+		closest, _ := p2.pl.Project(*point)
+		if closest.ApproxEqual(*point) {
+			return true, nil
 		}
 
 		return false, nil
@@ -954,13 +958,9 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 	if p2, ok := other.(*MultiLineString); ok {
 		// check the intersection for any linestring in the array.
 		for _, pl := range p2.pls {
-			for i := 0; i < pl.NumEdges(); i++ {
-				edge := pl.Edge(i)
-				start := s2.CellFromPoint(edge.V0)
-				end := s2.CellFromPoint(edge.V1)
-				if cell.IntersectsCell(start) || cell.IntersectsCell(end) {
-					return true, nil
-				}
+			closest, _ := pl.Project(*point)
+			if closest.ApproxEqual(*point) {
+				return true, nil
 			}
 		}
 
@@ -979,8 +979,10 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is a circle.
 	if c, ok := other.(*Circle); ok {
-
-		if c.s2cap.IntersectsCell(*cell) {
+		// check if the point is contained within the circle
+		// by calculating the distance between the point and the
+		// center of the circle.
+		if c.s2cap.ContainsPoint(*point) {
 			return true, nil
 		}
 
@@ -989,8 +991,9 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 
 	// check if the other shape is an envelope.
 	if e, ok := other.(*Envelope); ok {
-
-		if e.r.IntersectsCell(*cell) {
+		// check if the point is contained by the envelope
+		// by checking if the point is within its bounds
+		if e.r.ContainsPoint(*point) {
 			return true, nil
 		}
 
@@ -1001,15 +1004,14 @@ func checkCellIntersectsShape(cell *s2.Cell, shapeIn,
 		" found in document", other.Type())
 }
 
-// checkCellContainsShape checks whether the given shape in
-// in the document is contained with the s2cell.
-func checkCellContainsShape(cells []*s2.Cell,
+// checkPointContainsShape checks whether the given shape in
+// in the document is approximately contained with the point.
+func checkPointContainsShape(points []*s2.Point,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		for _, cell := range cells {
-
-			if cell.ContainsPoint(*p2.s2point) {
+		for _, point := range points {
+			if point.ApproxEqual(*p2.s2point) {
 				return true, nil
 			}
 		}
@@ -1018,12 +1020,12 @@ func checkCellContainsShape(cells []*s2.Cell,
 	}
 
 	// check if the other shape is a multipoint, if so containment is
-	// checked for every point in the multipoint with every given cells.
+	// checked for every point in the multipoint with every given point.
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the containment for every point in the collection.
 		lookup := make(map[int]struct{})
-		for _, cell := range cells {
-			for pos, point := range p2.s2points {
+		for _, qpoint := range points {
+			for pos, dpoint := range p2.s2points {
 				if _, done := lookup[pos]; done {
 					continue
 				}
@@ -1032,7 +1034,7 @@ func checkCellContainsShape(cells []*s2.Cell,
 					return true, nil
 				}
 
-				if cell.ContainsPoint(*point) {
+				if qpoint.ApproxEqual(*dpoint) {
 					lookup[pos] = struct{}{}
 				}
 			}
