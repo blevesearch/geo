@@ -946,8 +946,7 @@ func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (b
 	if p2, ok := other.(*LineString); ok {
 		// project the point to the linestring and check if
 		// the projection is equal to the point.
-		closest, _ := p2.pl.Project(*point)
-		if closest.ApproxEqual(*point) {
+		if polylineIntersectsPoint([]*s2.Polyline{p2.pl}, point) {
 			return true, nil
 		}
 
@@ -957,11 +956,8 @@ func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (b
 	// check if the other shape is a multilinestring.
 	if p2, ok := other.(*MultiLineString); ok {
 		// check the intersection for any linestring in the array.
-		for _, pl := range p2.pls {
-			closest, _ := pl.Project(*point)
-			if closest.ApproxEqual(*point) {
-				return true, nil
-			}
+		if polylineIntersectsPoint(p2.pls, point) {
+			return true, nil
 		}
 
 		return false, nil
