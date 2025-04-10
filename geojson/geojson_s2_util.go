@@ -25,12 +25,13 @@ import (
 
 // ------------------------------------------------------------------------
 
+// project the point to all of the linestrings and check if
+// any of the projections are equal to the point.
 func polylineIntersectsPoint(pls []*s2.Polyline,
 	point *s2.Point) bool {
-	s2cell := s2.CellFromPoint(*point)
-
 	for _, pl := range pls {
-		if pl.IntersectsCell(s2cell) {
+		closest, _ := pl.Project(*point)
+		if closest.ApproxEqual(*point) {
 			return true
 		}
 	}
@@ -243,20 +244,6 @@ func s2Cap(vertices []float64, radiusInMeter float64) *s2.Cap {
 	angle := radiusInMetersToS1Angle(float64(radiusInMeter))
 	cap := s2.CapFromCenterAngle(cp, angle)
 	return &cap
-}
-
-func max(a, b float64) float64 {
-	if a >= b {
-		return a
-	}
-	return b
-}
-
-func min(a, b float64) float64 {
-	if a >= b {
-		return b
-	}
-	return a
 }
 
 func StripCoveringTerms(terms []string) []string {
