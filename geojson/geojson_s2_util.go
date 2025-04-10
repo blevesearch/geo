@@ -52,33 +52,36 @@ func polylineIntersectsPoint(pls []*s2.Polyline,
 	return false
 }
 
+// check if any of the polyline vertices lie inside or
+// on the boundary of any of the polygons. Then check if
+// any of the polylines intersect with any of the edges of
+// the polygons
 func polylineIntersectsPolygons(pls []*s2.Polyline,
 	s2pgns []*s2.Polygon) bool {
-	// Early exit if the polygon contains any of the line's vertices.
+	idx := s2.NewShapeIndex()
+	for _, pgn := range s2pgns {
+		idx.Add(pgn)
+	}
+
+	containsQuery := s2.NewContainsPointQuery(idx, s2.VertexModelClosed)
 	for _, pl := range pls {
-		for i := 0; i < pl.NumEdges(); i++ {
-			edge := pl.Edge(i)
-			for _, s2pgn := range s2pgns {
-				if s2pgn.IntersectsCell(s2.CellFromPoint(edge.V0)) ||
-					s2pgn.IntersectsCell(s2.CellFromPoint(edge.V1)) {
-					return true
-				}
+		for _, point := range *pl {
+			if containsQuery.Contains(point) {
+				return true
 			}
 		}
 	}
 
 	for _, pl := range pls {
 		for _, s2pgn := range s2pgns {
-			for i := 0; i < pl.NumEdges(); i++ {
-				for i := 0; i < s2pgn.NumEdges(); i++ {
-					edgeB := s2pgn.Edge(i)
-					latLng1 := s2.LatLngFromPoint(edgeB.V0)
-					latLng2 := s2.LatLngFromPoint(edgeB.V1)
-					pl2 := s2.PolylineFromLatLngs([]s2.LatLng{latLng1, latLng2})
+			for i := 0; i < s2pgn.NumEdges(); i++ {
+				edgeB := s2pgn.Edge(i)
+				latLng1 := s2.LatLngFromPoint(edgeB.V0)
+				latLng2 := s2.LatLngFromPoint(edgeB.V1)
+				pl2 := s2.PolylineFromLatLngs([]s2.LatLng{latLng1, latLng2})
 
-					if pl.Intersects(pl2) {
-						return true
-					}
+				if pl.Intersects(pl2) {
+					return true
 				}
 			}
 		}
@@ -156,24 +159,20 @@ func rectangleIntersectsWithLineStrings(s2rect *s2.Rect,
 	polylines []*s2.Polyline) bool {
 	// Early exit path if the envelope contains any of the linestring's vertices.
 	for _, pl := range polylines {
-		for i := 0; i < pl.NumEdges(); i++ {
-			edge := pl.Edge(i)
-			if s2rect.IntersectsCell(s2.CellFromPoint(edge.V0)) ||
-				s2rect.IntersectsCell(s2.CellFromPoint(edge.V1)) {
+		for _, point := range *pl {
+			if s2rect.ContainsPoint(point) {
 				return true
 			}
 		}
 	}
 
 	for _, pl := range polylines {
-		for i := 0; i < pl.NumEdges(); i++ {
-			for j := 0; j < 4; j++ {
-				pl2 := s2.PolylineFromLatLngs([]s2.LatLng{s2rect.Vertex(j),
-					s2rect.Vertex((j + 1) % 4)})
+		for i := 0; i < 4; i++ {
+			pl2 := s2.PolylineFromLatLngs([]s2.LatLng{s2rect.Vertex(i),
+				s2rect.Vertex((i + 1) % 4)})
 
-				if pl.Intersects(pl2) {
-					return true
-				}
+			if pl.Intersects(pl2) {
+				return true
 			}
 		}
 	}
