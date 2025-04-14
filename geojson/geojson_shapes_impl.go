@@ -1632,9 +1632,7 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		s2cell := s2.CellFromPoint(*p2.s2point)
-
-		if s2rect.IntersectsCell(s2cell) {
+		if s2rect.ContainsPoint(*p2.s2point) {
 			return true, nil
 		}
 
@@ -1645,9 +1643,7 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the intersection for any point in the collection.
 		for _, point := range p2.s2points {
-			s2cell := s2.CellFromPoint(*point)
-
-			if s2rect.IntersectsCell(s2cell) {
+			if s2rect.ContainsPoint(*point) {
 				return true, nil
 			}
 		}
@@ -1657,7 +1653,6 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a polygon.
 	if pgn, ok := other.(*Polygon); ok {
-
 		if rectangleIntersectsWithPolygons(s2rect,
 			[]*s2.Polygon{pgn.s2pgn}) {
 			return true, nil
@@ -1678,7 +1673,6 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a linestring.
 	if ls, ok := other.(*LineString); ok {
-
 		if rectangleIntersectsWithLineStrings(s2rect,
 			[]*s2.Polyline{ls.pl}) {
 			return true, nil
@@ -1689,7 +1683,6 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a multilinestring.
 	if mls, ok := other.(*MultiLineString); ok {
-
 		if rectangleIntersectsWithLineStrings(s2rect, mls.pls) {
 			return true, nil
 		}
@@ -1717,7 +1710,6 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a envelope.
 	if e, ok := other.(*Envelope); ok {
-
 		if s2rect.Intersects(*e.r) {
 			return true, nil
 		}
@@ -1735,9 +1727,7 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		s2LatLng := s2.LatLngFromPoint(*p2.s2point)
-
-		if s2rect.ContainsLatLng(s2LatLng) {
+		if s2rect.ContainsPoint(*p2.s2point) {
 			return true, nil
 		}
 
@@ -1748,9 +1738,7 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the intersection for any point in the collection.
 		for _, point := range p2.s2points {
-			s2LatLng := s2.LatLngFromPoint(*point)
-
-			if !s2rect.ContainsLatLng(s2LatLng) {
+			if !s2rect.ContainsPoint(*point) {
 				return false, nil
 			}
 		}
@@ -1760,17 +1748,14 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a polygon.
 	if p2, ok := other.(*Polygon); ok {
-		s2pgnRect := s2PolygonFromS2Rectangle(s2rect)
-		return s2pgnRect.Contains(p2.s2pgn), nil
+		return s2rect.Contains(p2.s2pgn.RectBound()), nil
 	}
 
 	// check if the other shape is a multipolygon.
 	if p2, ok := other.(*MultiPolygon); ok {
-		s2pgnRect := s2PolygonFromS2Rectangle(s2rect)
-
 		// check the containment for every polygon in the collection.
 		for _, s2pgn := range p2.s2pgns {
-			if !s2pgnRect.Contains(s2pgn) {
+			if !s2rect.Contains(s2pgn.RectBound()) {
 				return false, nil
 			}
 		}
@@ -1780,26 +1765,14 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a linestring.
 	if p2, ok := other.(*LineString); ok {
-		for i := 0; i < p2.pl.NumEdges(); i++ {
-			edge := p2.pl.Edge(i)
-			if !s2rect.ContainsPoint(edge.V0) ||
-				!s2rect.ContainsPoint(edge.V1) {
-				return false, nil
-			}
-		}
-
-		return true, nil
+		return s2rect.Contains(p2.pl.RectBound()), nil
 	}
 
 	// check if the other shape is a multilinestring.
 	if p2, ok := other.(*MultiLineString); ok {
 		for _, pl := range p2.pls {
-			for i := 0; i < pl.NumEdges(); i++ {
-				edge := pl.Edge(i)
-				if !s2rect.ContainsPoint(edge.V0) ||
-					!s2rect.ContainsPoint(edge.V1) {
-					return false, nil
-				}
+			if !s2rect.Contains(pl.RectBound()) {
+				return false, nil
 			}
 		}
 		return true, nil
@@ -1817,7 +1790,6 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a circle.
 	if c, ok := other.(*Circle); ok {
-
 		if s2rect.Contains(c.s2cap.RectBound()) {
 			return true, nil
 		}
@@ -1827,7 +1799,6 @@ func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a envelope.
 	if e, ok := other.(*Envelope); ok {
-
 		if s2rect.Contains(*e.r) {
 			return true, nil
 		}
