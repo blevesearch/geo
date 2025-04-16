@@ -18,8 +18,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/golang/geo/s1"
-	"github.com/golang/geo/s2"
+	"github.com/blevesearch/geo/s1"
+	"github.com/blevesearch/geo/s2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )

@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/geo/r1"
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/r1"
+	"github.com/blevesearch/geo/s1"
 )
 
 func TestCellUnionDuplicateCellsNotValid(t *testing.T) {
@@ -376,7 +376,7 @@ func addCells(id CellID, selected bool, input *[]CellID, expected *[]CellID, t *
 // TODO(rsned): This test has been split out into several smaller test cases in C++.
 // It might make sense to refactor this to stay more inline with what's current.
 func TestCellUnionNormalizePseudoRandom(t *testing.T) {
-	// TODO(rsned): https://github.com/golang/geo/issues/120
+	// TODO(rsned): https://github.com/blevesearch/geo/issues/120
 	// Test is still flaky without a fixed seed. Specify one for now until
 	// issue 120 is fully resolved.
 	random = rand.New(rand.NewSource(1))

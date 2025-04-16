@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/s1"
 )
 
 func TestKmToAngle(t *testing.T) {

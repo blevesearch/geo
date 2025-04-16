@@ -19,8 +19,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/golang/geo/r2"
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/r2"
+	"github.com/blevesearch/geo/s1"
 )
 
 // maxCellSize is the upper bounds on the number of bytes we want the Cell object to ever be.
@@ -559,7 +559,7 @@ func TestCellContainsPoint(t *testing.T) {
 
 func TestCellContainsPointConsistentWithS2CellIDFromPoint(t *testing.T) {
 	// TODO: Is it still about 1% flaky with a random seed.
-	// TODO(rsned): https://github.com/golang/geo/issues/120
+	// TODO(rsned): https://github.com/blevesearch/geo/issues/120
 
 	// Construct many points that are nearly on a Cell edge, and verify that
 	// CellFromCellID(cellIDFromPoint(p)).Contains(p) is always true.
@@ -731,7 +731,7 @@ func maxDistanceToEdgeBruteForce(cell Cell, a, b Point) s1.ChordAngle {
 
 func TestCellDistanceToEdge(t *testing.T) {
 	// TODO: Is it still about 0.1% flaky with a random seed.
-	// TODO(rsned): https://github.com/golang/geo/issues/120
+	// TODO(rsned): https://github.com/blevesearch/geo/issues/120
 
 	for iter := 0; iter < 1000; iter++ {
 		cell := CellFromCellID(randomCellID())

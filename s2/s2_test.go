@@ -21,9 +21,9 @@ import (
 	"math/rand"
 	"os"
 
-	"github.com/golang/geo/r1"
-	"github.com/golang/geo/r2"
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/r1"
+	"github.com/blevesearch/geo/r2"
+	"github.com/blevesearch/geo/s1"
 )
 
 var (
@@ -104,7 +104,7 @@ func randomBits(num uint32, r ...*rand.Rand) uint64 {
 // TODO(rsned): C++ has moved to absl::Uniform and absl/random/random.h. See if
 // these lower level random helpers can be converted to just use the standard
 // rand.Uint64() instead.
-// https://github.com/golang/geo/issues/131
+// https://github.com/blevesearch/geo/issues/131
 func randomUint64(r ...*rand.Rand) uint64 {
 	rnd := random
 	if len(r) > 0 {
