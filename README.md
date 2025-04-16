@@ -2,6 +2,11 @@
 
 [![Go Build and Test](https://github.com/golang/geo/actions/workflows/go.yml/badge.svg)](https://github.com/golang/geo/actions/workflows/go.yml) [![CodeQL](https://github.com/golang/geo/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/golang/geo/actions/workflows/github-code-scanning/codeql) [![golangci-lint](https://github.com/golang/geo/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/golang/geo/actions/workflows/golangci-lint.yml) [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/golang/geo?label=OpenSSF%20Scorecard&style=flat)](https://scorecard.dev/viewer/?uri=github.com/golang/geo)
 
+This forked version of s2geometry implements a few essential functionalities
+like region term indexer, polygon projections etc for enabling the use of s2geo
+in the information retrieval systems that uses an inverted index for indexing
+and querying the spatial tokens.
+
 S2 is a library for spherical geometry that aims to have the same robustness,
 flexibility, and performance as the best planar geometry libraries.
 

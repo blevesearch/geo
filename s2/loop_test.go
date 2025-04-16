@@ -17,6 +17,7 @@ package s2
 import (
 	"fmt"
 	"math"
+	"os"
 	"testing"
 
 	"github.com/golang/geo/r1"
@@ -1816,4 +1817,62 @@ func BenchmarkLoopContainsPoint(b *testing.B) {
 			})
 		vertices *= 2
 	}
+}
+
+func BenchmarkLoopDecode(b *testing.B) {
+
+	points := make([][]float64, 0)
+
+	points = append(points, []float64{10, 10})
+	for i := 1; i < 2000; i++ {
+		points = append(points, []float64{10 - 0.01*float64(i), 10})
+	}
+	points = append(points, []float64{-10, 10})
+	for i := 1; i < 2000; i++ {
+		points = append(points, []float64{-10, 10 - 0.01*float64(i)})
+	}
+	points = append(points, []float64{-10, -10})
+	for i := 1; i < 2000; i++ {
+		points = append(points, []float64{-10 + 0.01*float64(i), -10})
+	}
+	points = append(points, []float64{10, -10})
+	for i := 1; i < 2000; i++ {
+		points = append(points, []float64{10, -10 + 0.01*float64(i)})
+	}
+	points = append(points, []float64{10, 10})
+
+	pointString := ""
+
+	for i := 0; i < len(points); i++ {
+
+		if i == 0 {
+			pointString = pointString + fmt.Sprintf("%f:%f", points[i][0], points[i][1])
+		} else {
+			pointString = pointString + fmt.Sprintf(", %f:%f", points[i][0], points[i][1])
+		}
+	}
+
+	loop := LoopFromPoints(parsePoints(pointString))
+
+	f, err := os.OpenFile("testLoop.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+    if err != nil {
+        b.Fatalf("%v", err)
+    }
+	loop.Encode(f)
+	f.Close()
+
+	bufPool := NewGeoBufferPool(24 * 1024, 24)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		f, err := os.Open("testLoop.txt")
+		if err != nil {
+			b.Fatalf("%v", err)
+		}
+		l := &Loop{
+			BufPool: bufPool,
+		}
+		l.decode(&decoder{r: asByteReader(f)})
+		f.Close()
+	}
+	os.Remove("testLoop.txt")
 }

@@ -77,6 +77,9 @@ type Polygon struct {
 	// preceding loops in the polygon. This field is used for polygons that
 	// have a large number of loops, and may be empty for polygons with few loops.
 	cumulativeEdges []int
+
+	// A buffer pool to be used while decoding the polygon
+	BufPool *GeoBufferPool
 }
 
 // PolygonFromLoops constructs a polygon from the given set of loops. The polygon
@@ -1154,7 +1157,7 @@ func (p *Polygon) Decode(r io.Reader) error {
 const maxEncodedLoops = 10000000
 
 func (p *Polygon) decode(d *decoder) {
-	*p = Polygon{}
+	*p = Polygon{BufPool: p.BufPool}
 	d.readUint8() // Ignore irrelevant serialized owns_loops_ value.
 
 	p.hasHoles = d.readBool()
@@ -1172,6 +1175,7 @@ func (p *Polygon) decode(d *decoder) {
 	p.loops = make([]*Loop, nloops)
 	for i := range p.loops {
 		p.loops[i] = new(Loop)
+		p.loops[i].BufPool = p.BufPool
 		p.loops[i].decode(d)
 		p.numVertices += len(p.loops[i].vertices)
 	}
@@ -1205,12 +1209,29 @@ func (p *Polygon) decodeCompressed(d *decoder) {
 	p.initLoopProperties()
 }
 
+func (p *Polygon) Project(point *Point) Point {
+	if p.ContainsPoint(*point) {
+		return *point
+	}
+	return p.ProjectToBoundary(point)
+}
+
+func (p *Polygon) ProjectToBoundary(point *Point) Point {
+	options := NewClosestEdgeQueryOptions().MaxResults(1).IncludeInteriors(false)
+	q := NewClosestEdgeQuery(p.index, options)
+	target := NewMinDistanceToPointTarget(*point)
+	edges := q.FindEdges(target)
+	return q.Project(*point, edges[0])
+}
+
 // TODO(roberts): Differences from C++
+// Project - implemented in this fork.
+// ProjectToBoundary - implemented in this fork.
+
+// Centroid
 // SnapLevel
 // DistanceToPoint
 // DistanceToBoundary
-// Project
-// ProjectToBoundary
 // ApproxContains/ApproxDisjoint for Polygons
 // InitTo{Intersection/ApproxIntersection/Union/ApproxUnion/Diff/ApproxDiff}
 // InitToSimplified
