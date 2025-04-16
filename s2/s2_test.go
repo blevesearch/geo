@@ -21,9 +21,9 @@ import (
 	"math/rand"
 	"os"
 
-	"github.com/golang/geo/r1"
-	"github.com/golang/geo/r2"
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/r1"
+	"github.com/blevesearch/geo/r2"
+	"github.com/blevesearch/geo/s1"
 )
 
 var (

@@ -19,7 +19,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/s1"
 )
 
 // A CellUnion is a collection of CellIDs.

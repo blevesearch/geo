@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/s1"
 )
 
 func ExampleInterval_DirectedHausdorffDistance() {

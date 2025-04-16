@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/geo/r1"
+	"github.com/blevesearch/geo/r1"
 )
 
 var (
