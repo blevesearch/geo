@@ -19,7 +19,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/s1"
 )
 
 const (
@@ -1103,6 +1103,38 @@ func TestPolygonArea(t *testing.T) {
 	for _, test := range tests {
 		if got := test.have.Area(); !float64Eq(got, test.want) {
 			t.Errorf("%v.Area() = %v, want %v", test.have, got, test.want)
+		}
+	}
+}
+
+func TestPolygonCentroid(t *testing.T) {
+	tests := []struct {
+		have *Polygon
+		want Point
+	}{
+		{have: emptyPolygon, want: Point{}},
+		{have: fullPolygon, want: Point{}},
+		{
+			// compare the polygon of two shells to the sum of its loops.
+			have: makePolygon(loopCross1SideHole+loopCrossCenterHole, true),
+			// the strings for the loops contain ';' so copy and paste without it
+			want: Point{
+				makeLoop("-1.5:0.5, -1.2:0.5, -1.2:-0.5, -1.5:-0.5").Centroid().Vector.Add(
+					makeLoop("-0.5:0.5, 0.5:0.5, 0.5:-0.5, -0.5:-0.5").Centroid().Vector)},
+		},
+		{
+			// test that polygon with a shell and a hole matches its loop parts.
+			have: makePolygon(loopCross1+loopCrossCenterHole, true),
+			// the strings for the loops contain ';' so copy and paste without it
+			want: Point{
+				makeLoop("-2:1, -1:1, 1:1, 2:1, 2:-1, 1:-1, -1:-1, -2:-1").Centroid().Vector.Sub(
+					makeLoop("-0.5:0.5, 0.5:0.5, 0.5:-0.5, -0.5:-0.5").Centroid().Vector)},
+		},
+	}
+
+	for _, test := range tests {
+		if got := test.have.Centroid(); got.Vector.Cmp(test.want.Vector) != 0 {
+			t.Errorf("%v.Centroid() = %v, want %v", test.have, got, test.want)
 		}
 	}
 }

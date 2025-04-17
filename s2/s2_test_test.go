@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/s1"
 )
 
 func TestKmToAngle(t *testing.T) {
@@ -141,7 +141,7 @@ func TestTestingFractal(t *testing.T) {
 		// can be simplified to sqrt((k-1)/n).
 		numLevels := test.maxLevel - test.minLevel + 1
 		minVertices := numVerticesAtLevel(test.minLevel)
-		relativeError := math.Sqrt((float64(numLevels) - 1.0) / float64(minVertices))
+		relativeError := 2.0 * math.Sqrt((float64(numLevels)-1.0)/float64(minVertices))
 
 		// expansionFactor is the total fractal length at level n+1 divided by
 		// the total fractal length at level n.
@@ -151,7 +151,7 @@ func TestTestingFractal(t *testing.T) {
 
 		// trianglePerim is the perimeter of the original equilateral triangle
 		// before any subdivision occurs.
-		trianglePerim := 3 * math.Sqrt(3) * math.Tan(nominalRadius)
+		trianglePerim := 3 * sqrt3 * math.Tan(nominalRadius)
 		minLengthSum := trianglePerim * math.Pow(expansionFactor, float64(test.minLevel))
 		for level := test.minLevel; level <= test.maxLevel; level++ {
 			expectedNumVertices += float64(numVerticesAtLevel(level))
@@ -212,7 +212,7 @@ func TestTestingFractal(t *testing.T) {
 }
 
 // TestChordAngleMaxPointError is located in here to work around circular
-// import issues. This s1 test needs s2.Points which wont work with our
+// import issues. This s1 test needs s2.Points which won't work with our
 // packages. The test is in this file since while it uses Points, it's not
 // part of Points methods so it shouldn't be in s2point_test.
 func TestChordAngleMaxPointError(t *testing.T) {
@@ -241,7 +241,7 @@ func TestChordAngleMaxPointError(t *testing.T) {
 	}
 }
 
-// TODO(roberts): Remaining tests
+// TODO(rsned): Remaining tests
 // TriangleFractal
 // TriangleMultiFractal
 // SpaceFillingFractal

@@ -18,9 +18,15 @@ import (
 	"math"
 	"testing"
 
-	"github.com/golang/geo/r3"
-	"github.com/golang/geo/s1"
+	"github.com/blevesearch/geo/r3"
+	"github.com/blevesearch/geo/s1"
 )
+
+// pointNear reports if each component of the two points is within the given epsilon.
+// This is similar to Point/Vector.ApproxEqual but with a user supplied epsilon.
+func pointNear(a, b Point, ε float64) bool {
+	return math.Abs(a.X-b.X) < ε && math.Abs(a.Y-b.Y) < ε && math.Abs(a.Z-b.Z) < ε
+}
 
 func TestOriginPoint(t *testing.T) {
 	if math.Abs(OriginPoint().Norm()-1) > 1e-15 {
@@ -33,7 +39,7 @@ func TestOriginPoint(t *testing.T) {
 	// Cells. (The line of longitude through the chosen point is always 1/3
 	// or 2/3 of the way across any Cell with longitudinal edges that it
 	// passes through.)
-	p := Point{r3.Vector{-0.01, 0.01 * stToUV(2.0/3), 1}}
+	p := Point{r3.Vector{X: -0.01, Y: 0.01 * stToUV(2.0/3), Z: 1}}
 	if !p.ApproxEqual(OriginPoint()) {
 		t.Errorf("Origin point should fall in the Siberian Sea, but does not.")
 	}
@@ -54,8 +60,8 @@ func TestPointCross(t *testing.T) {
 		{1, 2, 3, -4, 5, -6, 2 * math.Sqrt(934)},
 	}
 	for _, test := range tests {
-		p1 := Point{r3.Vector{test.p1x, test.p1y, test.p1z}}
-		p2 := Point{r3.Vector{test.p2x, test.p2y, test.p2z}}
+		p1 := Point{r3.Vector{X: test.p1x, Y: test.p1y, Z: test.p1z}}
+		p2 := Point{r3.Vector{X: test.p2x, Y: test.p2y, Z: test.p2z}}
 		result := p1.PointCross(p2)
 		if !float64Eq(result.Norm(), test.norm) {
 			t.Errorf("|%v ⨯ %v| = %v, want %v", p1, p2, result.Norm(), test.norm)
@@ -82,8 +88,8 @@ func TestPointDistance(t *testing.T) {
 		{1, 2, 3, 2, 3, -1, 1.2055891055045298},
 	}
 	for _, test := range tests {
-		p1 := Point{r3.Vector{test.x1, test.y1, test.z1}}
-		p2 := Point{r3.Vector{test.x2, test.y2, test.z2}}
+		p1 := Point{r3.Vector{X: test.x1, Y: test.y1, Z: test.z1}}
+		p2 := Point{r3.Vector{X: test.x2, Y: test.y2, Z: test.z2}}
 		if a := p1.Distance(p2).Radians(); !float64Eq(a, test.want) {
 			t.Errorf("%v.Distance(%v) = %v, want %v", p1, p2, a, test.want)
 		}
@@ -94,7 +100,7 @@ func TestPointDistance(t *testing.T) {
 }
 
 func TestChordAngleBetweenPoints(t *testing.T) {
-	for iter := 0; iter < 10; iter++ {
+	for iter := 0; iter < 100; iter++ {
 		m := randomFrame()
 		x := m.col(0)
 		y := m.col(1)
@@ -136,10 +142,63 @@ func TestPointApproxEqual(t *testing.T) {
 		{1, epsilon, 0, 1, -epsilon, epsilon, false},
 	}
 	for _, test := range tests {
-		p1 := Point{r3.Vector{test.x1, test.y1, test.z1}}
-		p2 := Point{r3.Vector{test.x2, test.y2, test.z2}}
+		p1 := Point{r3.Vector{X: test.x1, Y: test.y1, Z: test.z1}}
+		p2 := Point{r3.Vector{X: test.x2, Y: test.y2, Z: test.z2}}
 		if got := p1.ApproxEqual(p2); got != test.want {
 			t.Errorf("%v.ApproxEqual(%v), got %v want %v", p1, p2, got, test.want)
+		}
+	}
+}
+
+func TestPointOrtho(t *testing.T) {
+	tests := []struct {
+		have Point
+		want Point
+	}{
+		// Vector's Ortho returns an axis-aligned ortho for an
+		// axis-aligned input. Check that this does not.
+		{
+			have: Point{r3.Vector{X: 1, Y: 0, Z: 0}},
+			want: Point{r3.Vector{X: 0, Y: -0.999985955295886075333556, Z: 0.005299925563068195837058}},
+		},
+		{
+			have: Point{r3.Vector{X: 0, Y: 1, Z: 0}},
+			want: Point{r3.Vector{X: 0.004569952278750987959000, Y: 0.0, Z: -0.999989557713564125585037}},
+		},
+		{
+			have: Point{r3.Vector{X: 0, Y: 0, Z: 1}},
+			want: Point{r3.Vector{X: -0.999928007775066962636856, Y: 0.011999136093300803371231, Z: 0}},
+		},
+
+		// Test a couple other values
+		{
+			have: Point{r3.Vector{X: 1, Y: 1, Z: 1}},
+			want: Point{r3.Vector{X: -0.709740689278763769998193, Y: 0.005297583276916723732386, Z: 0.704443106001847008101890}},
+		},
+		{
+			have: Point{r3.Vector{X: 3, Y: -2, Z: 0.4}},
+			want: Point{r3.Vector{X: -0.555687999915428054720223, Y: -0.831317152491703792449584, Z: 0.011074236907191168863274}},
+		},
+		{
+			have: Point{r3.Vector{X: 0.012, Y: 0.0053, Z: 0.00457}},
+			want: Point{r3.Vector{X: 0.404015523469256565558538, Y: -0.914752128609637393807930, Z: 0}},
+		},
+	}
+
+	for _, test := range tests {
+		got := Ortho(test.have)
+
+		if got != test.want {
+			t.Errorf("Ortho(%v) = %v, want %v", test.have, got, test.want)
+		}
+
+		// Test that the dot product with the orthogonal result is zero.
+		if !float64Eq(test.have.Dot(got.Vector), 0) {
+			t.Errorf("%v = not orthogonal to %v.Ortho()", test.have, got)
+		}
+
+		if !got.IsUnit() {
+			t.Errorf("%v should be unit length, but is not", got)
 		}
 	}
 }
@@ -201,8 +260,8 @@ func TestPointRegularPoints(t *testing.T) {
 }
 
 func TestPointRegion(t *testing.T) {
-	p := Point{r3.Vector{1, 0, 0}}
-	r := Point{r3.Vector{1, 0, 0}}
+	p := Point{r3.Vector{X: 1, Y: 0, Z: 0}}
+	r := Point{r3.Vector{X: 1, Y: 0, Z: 0}}
 	if !r.Contains(p) {
 		t.Errorf("%v.Contains(%v) = false, want true", r, p)
 	}
@@ -215,7 +274,7 @@ func TestPointRegion(t *testing.T) {
 	if !r.ContainsPoint(r) {
 		t.Errorf("%v.ContainsPoint(%v) = false, want true", r, r)
 	}
-	if s := (Point{r3.Vector{1, 0, 1}}); r.Contains(s) {
+	if s := (Point{r3.Vector{X: 1, Y: 0, Z: 1}}); r.Contains(s) {
 		t.Errorf("%v.Contains(%v) = true, want false", r, s)
 	}
 	if got, want := r.CapBound(), CapFromPoint(p); !got.ApproxEqual(want) {
@@ -282,6 +341,120 @@ func TestPointRotate(t *testing.T) {
 		rotationError := math.Remainder((angle - actualRotation).Radians(), 2*math.Pi)
 		if rotationError > maxRotationError {
 			t.Errorf("rotational angle of %v = %v, want %v", got, actualRotation, angle)
+		}
+	}
+}
+
+func TestPointIsNormalizable(t *testing.T) {
+	tests := []struct {
+		have Point
+		want bool
+	}{
+		{
+			// 0,0,0 is not normalizeable.
+			have: Point{r3.Vector{X: 0, Y: 0, Z: 0}},
+			want: false,
+		},
+		{
+			have: Point{r3.Vector{X: 1, Y: 1, Z: 1}},
+			want: true,
+		},
+
+		// The approximate cutoff is ~1.4149498560666738e-73
+		{
+			have: Point{r3.Vector{X: 1, Y: 0, Z: 0}},
+			want: true,
+		},
+		{
+			// Only one too small component.
+			have: Point{r3.Vector{X: 1e-75, Y: 1, Z: 1}},
+			want: true,
+		},
+		{
+			// All three components exact boundary case.
+			have: Point{r3.Vector{
+				X: math.Ldexp(1, -242),
+				Y: math.Ldexp(1, -242),
+				Z: math.Ldexp(1, -242)}},
+			want: true,
+		},
+		{
+			// All three components too small.
+			have: Point{r3.Vector{
+				X: math.Ldexp(1, -243),
+				Y: math.Ldexp(1, -243),
+				Z: math.Ldexp(1, -243)}},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		if got := test.have.IsNormalizable(); got != test.want {
+			t.Errorf("%+v.IsNormalizable() = %t, want %t", test.have, got, test.want)
+		}
+	}
+}
+
+func TestPointEnsureNormalizable(t *testing.T) {
+	tests := []struct {
+		have Point
+		want Point
+	}{
+		{
+			// 0,0,0 is not normalizeable.
+			have: Point{r3.Vector{X: 0, Y: 0, Z: 0}},
+			want: Point{r3.Vector{X: 0, Y: 0, Z: 0}},
+		},
+		{
+			have: Point{r3.Vector{X: 1, Y: 0, Z: 0}},
+			want: Point{r3.Vector{X: 1, Y: 0, Z: 0}},
+		},
+		{
+			// All three components exact border for still normalizeable.
+			have: Point{r3.Vector{
+				X: math.Ldexp(1, -242),
+				Y: math.Ldexp(1, -242),
+				Z: math.Ldexp(1, -242),
+			}},
+			want: Point{r3.Vector{
+				X: math.Ldexp(1, -242),
+				Y: math.Ldexp(1, -242),
+				Z: math.Ldexp(1, -242),
+			}},
+		},
+		{
+			// All three components too small but the same.
+			have: Point{r3.Vector{
+				X: math.Ldexp(1, -243),
+				Y: math.Ldexp(1, -243),
+				Z: math.Ldexp(1, -243),
+			}},
+			want: Point{r3.Vector{
+				X: 1,
+				Y: 1,
+				Z: 1,
+			}},
+		},
+		{
+			// All three components too small but different.
+			have: Point{r3.Vector{
+				X: math.Ldexp(1, -243),
+				Y: math.Ldexp(1, -486),
+				Z: math.Ldexp(1, -729),
+			}},
+			want: Point{r3.Vector{
+				X: 1,
+				Y: 0,
+				Z: 0,
+			}},
+		},
+	}
+
+	for _, test := range tests {
+		got := test.have.EnsureNormalizable()
+		if !pointNear(got, test.want, 1e-50) {
+			t.Errorf("%+v.EnsureNormalizable() = %+v, want %+v",
+				test.have, got, test.want)
 		}
 	}
 }
