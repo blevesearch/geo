@@ -19,11 +19,24 @@ import (
 	"strings"
 
 	index "github.com/blevesearch/bleve_index_api"
-	"github.com/blevesearch/geo/s2"
 	"github.com/blevesearch/geo/s1"
+	"github.com/blevesearch/geo/s2"
 )
 
 // ------------------------------------------------------------------------
+
+// creates a shape index with all of the given polygons
+// and queries it with vertex model closed which considers
+// polygon edges and vertices to be part of the polygon.
+func polygonsContainsPoint(s2pgns []*s2.Polygon,
+	point *s2.Point) bool {
+	idx := s2.NewShapeIndex()
+	for _, s2pgn := range s2pgns {
+		idx.Add(s2pgn)
+	}
+
+	return s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point)
+}
 
 // project the point to all of the linestrings and check if
 // any of the projections are equal to the point.

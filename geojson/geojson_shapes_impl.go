@@ -892,7 +892,7 @@ func (e *Envelope) Contains(other index.GeoJSON) (bool, error) {
 func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		// Check if the points are equal
+		// check if the points are equal
 		if point.ApproxEqual(*p2.s2point) {
 			return true, nil
 		}
@@ -915,11 +915,7 @@ func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (b
 	// check if the other shape is a polygon.
 	if p2, ok := other.(*Polygon); ok {
 		// check if the point is contained within the polygon.
-		// polygon contains point will consider vertices to be outside
-		// so we create a shape index and query it instead
-		idx := s2.NewShapeIndex()
-		idx.Add(p2.s2pgn)
-		if s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point) {
+		if polygonsContainsPoint([]*s2.Polygon{p2.s2pgn}, point) {
 			return true, nil
 		}
 
@@ -929,13 +925,7 @@ func checkPointIntersectsShape(point *s2.Point, shapeIn, other index.GeoJSON) (b
 	// check if the other shape is a multipolygon.
 	if p2, ok := other.(*MultiPolygon); ok {
 		// check if the point is contained within any of the polygons
-		// polygon contains point will consider vertices to be outside
-		// so we create a shape index and query it instead
-		idx := s2.NewShapeIndex()
-		for _, s2pgn := range p2.s2pgns {
-			idx.Add(s2pgn)
-		}
-		if s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point) {
+		if polygonsContainsPoint(p2.s2pgns, point) {
 			return true, nil
 		}
 
