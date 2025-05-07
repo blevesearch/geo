@@ -298,6 +298,7 @@ func (ls *LineString) Intersects(other index.GeoJSON) (bool, error) {
 }
 
 func (ls *LineString) Contains(other index.GeoJSON) (bool, error) {
+	ls.init()
 	return checkLineStringsContainsShape([]*s2.Polyline{ls.pl}, other)
 }
 
@@ -366,6 +367,7 @@ func (p *MultiLineString) Intersects(other index.GeoJSON) (bool, error) {
 }
 
 func (p *MultiLineString) Contains(other index.GeoJSON) (bool, error) {
+	p.init()
 	return checkLineStringsContainsShape(p.pls, other)
 }
 
@@ -1053,7 +1055,6 @@ func checkLineStringsIntersectsShape(pls []*s2.Polyline, shapeIn,
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the intersection for any point in the collection.
 		for _, point := range p2.s2points {
-
 			if polylineIntersectsPoint(pls, point) {
 				return true, nil
 			}
@@ -1122,7 +1123,9 @@ func checkLineStringsIntersectsShape(pls []*s2.Polyline, shapeIn,
 			for i := 0; i < pl.NumEdges(); i++ {
 				edge := pl.Edge(i)
 				distance := s2.DistanceFromSegment(centre, edge.V0, edge.V1)
-				return distance <= c.s2cap.Radius(), nil
+				if distance <= c.s2cap.Radius() {
+					return true, nil
+				}
 			}
 		}
 
@@ -1144,6 +1147,27 @@ func checkLineStringsIntersectsShape(pls []*s2.Polyline, shapeIn,
 // points and multipoints for the linestring vertices.
 func checkLineStringsContainsShape(pls []*s2.Polyline,
 	other index.GeoJSON) (bool, error) {
+	// check if the other shape is a point.
+	if p2, ok := other.(*Point); ok {
+		if polylineIntersectsPoint(pls, p2.s2point) {
+			return true, nil
+		}
+
+		return false, nil
+	}
+
+	// check if the other shape is a multipoint.
+	if p2, ok := other.(*MultiPoint); ok {
+		// check the containment for every point in the collection.
+		for _, point := range p2.s2points {
+			if !polylineIntersectsPoint(pls, point) {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	}
+
 	return false, nil
 }
 
