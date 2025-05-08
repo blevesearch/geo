@@ -17,7 +17,6 @@ package s2
 import (
 	"fmt"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/blevesearch/geo/r1"
@@ -806,6 +805,29 @@ func TestLoopContainsMatchesCrossingSign(t *testing.T) {
 }
 
 func TestLoopRelations(t *testing.T) {
+	// this loop is used in the regression test cases below.
+	containingLoop := LoopFromPoints([]Point{
+		PointFromLatLng(LatLngFromDegrees(-38.0, -135.0)),
+		PointFromLatLng(LatLngFromDegrees(-38.0, 149.0)),
+		PointFromLatLng(LatLngFromDegrees(77.0, 149.0)),
+		PointFromLatLng(LatLngFromDegrees(77.0, -135.0)),
+	})
+
+	innerTile := LoopFromPoints([]Point{
+		PointFromLatLng(LatLngFromDegrees(37.99616267972809, 13.007812500000002)),
+		PointFromLatLng(LatLngFromDegrees(37.99616267972809, 13.359375000000002)),
+		PointFromLatLng(LatLngFromDegrees(38.272819658516866, 13.359375000000002)),
+		PointFromLatLng(LatLngFromDegrees(38.272819658516866, 13.007812500000002)),
+	})
+
+	// +0.2 lat +0.2 lon from innerTile
+	extendedTile := LoopFromPoints([]Point{
+		PointFromLatLng(LatLngFromDegrees(37.99616267972809, 13.007812500000002)),
+		PointFromLatLng(LatLngFromDegrees(37.99616267972809, 13.559375000000002)),
+		PointFromLatLng(LatLngFromDegrees(38.472819658516866, 13.559375000000002)),
+		PointFromLatLng(LatLngFromDegrees(38.472819658516866, 13.007812500000002)),
+	})
+
 	tests := []struct {
 		a, b       *Loop
 		contains   bool // A contains B
@@ -1333,6 +1355,19 @@ func TestLoopRelations(t *testing.T) {
 			contains:   true,
 			sharedEdge: true,
 		},
+		// Cases below here prevent regressions of bugs which
+		// previously appeared in the golang version
+		// and which are missing test coverage in the C++ codebase.
+		{
+			a:        containingLoop,
+			b:        innerTile,
+			contains: true,
+		},
+		{
+			a:        containingLoop,
+			b:        extendedTile,
+			contains: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -1351,7 +1386,7 @@ func TestLoopRelations(t *testing.T) {
 			a1 := cloneLoop(test.a)
 			a1.Invert()
 			testLoopNestedPair(t, a1, test.b)
-		} else if !(test.contains || test.contained || test.covers) {
+		} else if !test.contains && !test.contained && !test.covers {
 			// Given loops A and B such that both A and its complement
 			// intersect both B and its complement, test various
 			// identities involving these four loops.
@@ -1819,60 +1854,16 @@ func BenchmarkLoopContainsPoint(b *testing.B) {
 	}
 }
 
-func BenchmarkLoopDecode(b *testing.B) {
-
-	points := make([][]float64, 0)
-
-	points = append(points, []float64{10, 10})
-	for i := 1; i < 2000; i++ {
-		points = append(points, []float64{10 - 0.01*float64(i), 10})
-	}
-	points = append(points, []float64{-10, 10})
-	for i := 1; i < 2000; i++ {
-		points = append(points, []float64{-10, 10 - 0.01*float64(i)})
-	}
-	points = append(points, []float64{-10, -10})
-	for i := 1; i < 2000; i++ {
-		points = append(points, []float64{-10 + 0.01*float64(i), -10})
-	}
-	points = append(points, []float64{10, -10})
-	for i := 1; i < 2000; i++ {
-		points = append(points, []float64{10, -10 + 0.01*float64(i)})
-	}
-	points = append(points, []float64{10, 10})
-
-	pointString := ""
-
-	for i := 0; i < len(points); i++ {
-
-		if i == 0 {
-			pointString = pointString + fmt.Sprintf("%f:%f", points[i][0], points[i][1])
-		} else {
-			pointString = pointString + fmt.Sprintf(", %f:%f", points[i][0], points[i][1])
-		}
-	}
-
-	loop := LoopFromPoints(parsePoints(pointString))
-
-	f, err := os.OpenFile("testLoop.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-    if err != nil {
-        b.Fatalf("%v", err)
-    }
-	loop.Encode(f)
-	f.Close()
-
-	bufPool := NewGeoBufferPool(24 * 1024, 24)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		f, err := os.Open("testLoop.txt")
-		if err != nil {
-			b.Fatalf("%v", err)
-		}
-		l := &Loop{
-			BufPool: bufPool,
-		}
-		l.decode(&decoder{r: asByteReader(f)})
-		f.Close()
-	}
-	os.Remove("testLoop.txt")
-}
+// TODO(rsned): Differences from C++
+// TEST_F(S2LoopTestBase, CompressedEncodedLoopDecodesApproxEqual) {
+// TEST_F(S2LoopTestBase, DistanceMethods) {
+// TEST_F(S2LoopTestBase, GetAreaAccuracy) {
+// TEST_F(S2LoopTestBase, GetAreaConsistentWithSign) {
+// TEST_F(S2LoopTestBase, MakeRegularLoop) {
+// TEST(S2Loop, BoundaryNear) {
+// TEST(S2Loop, BoundsForLoopContainment) {
+// TEST(S2LoopDeathTest, IsValidDetectsInvalidLoops) {
+// TEST(S2Loop, DefaultLoopIsInvalid) {
+// TEST(S2Loop, EmptyFullLossyConversions) {
+// TEST(S2Loop, EncodeDecode) {
+// TEST(S2Loop, LoopRelations2) {
