@@ -17,7 +17,6 @@ package s2
 import (
 	"fmt"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/blevesearch/geo/r1"
