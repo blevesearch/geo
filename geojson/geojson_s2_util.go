@@ -90,6 +90,20 @@ func polylineIntersectsPolygons(pls []*s2.Polyline,
 	return false
 }
 
+// check if the point is contained within the polygon.
+// polygon contains point will consider vertices to be outside
+// so we create a shape index and query it instead
+// s2.VertexModelClosed will not consider points on the edges, so
+// behaviour there is arbitrary
+func polygonIntersectsPoint(s2pgns []*s2.Polygon,
+	point *s2.Point) bool {
+	idx := s2.NewShapeIndex()
+	for _, pgn := range s2pgns {
+		idx.Add(pgn)
+	}
+	return s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point)
+}
+
 func geometryCollectionIntersectsShape(gc *GeometryCollection,
 	shapeIn index.GeoJSON) bool {
 	for _, shape := range gc.Members() {
