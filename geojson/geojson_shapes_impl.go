@@ -1410,9 +1410,7 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-		s2cell := s2.CellFromPoint(*p2.s2point)
-
-		if s2cap.IntersectsCell(s2cell) {
+		if s2cap.ContainsPoint(*p2.s2point) {
 			return true, nil
 		}
 
@@ -1423,9 +1421,7 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the intersection for any point in the collection.
 		for _, point := range p2.s2points {
-			s2cell := s2.CellFromPoint(*point)
-
-			if s2cap.IntersectsCell(s2cell) {
+			if s2cap.ContainsPoint(*point) {
 				return true, nil
 			}
 		}
@@ -1448,7 +1444,9 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 			centerPoint := s2cap.Center()
 			projected := s2pgn.Project(&centerPoint)
 			distance := projected.Distance(centerPoint)
-			return distance <= s2cap.Radius(), nil
+			if distance <= s2cap.Radius() {
+				return true, nil
+			}
 		}
 
 		return false, nil
@@ -1493,7 +1491,6 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 
 	// check if the other shape is a envelope.
 	if e, ok := other.(*Envelope); ok {
-
 		if e.r.ContainsPoint(s2cap.Center()) {
 			return true, nil
 		}
@@ -1520,7 +1517,6 @@ func checkCircleContainsShape(s2cap *s2.Cap,
 	shapeIn, other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
 	if p2, ok := other.(*Point); ok {
-
 		if s2cap.ContainsPoint(*p2.s2point) {
 			return true, nil
 		}
@@ -1607,7 +1603,6 @@ func checkCircleContainsShape(s2cap *s2.Cap,
 
 	// check if the other shape is a circle.
 	if c, ok := other.(*Circle); ok {
-
 		if s2cap.Contains(*c.s2cap) {
 			return true, nil
 		}
@@ -1617,7 +1612,6 @@ func checkCircleContainsShape(s2cap *s2.Cap,
 
 	// check if the other shape is a envelope.
 	if e, ok := other.(*Envelope); ok {
-
 		for i := 0; i < 4; i++ {
 			if !s2cap.ContainsPoint(
 				s2.PointFromLatLng(e.r.Vertex(i))) {
