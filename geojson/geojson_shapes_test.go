@@ -21,7 +21,6 @@ import (
 )
 
 func TestPointIntersects(t *testing.T) {
-
 	tests := []struct {
 		queryPoint *Point
 		other      index.GeoJSON
@@ -382,7 +381,6 @@ func TestMultiPointContains(t *testing.T) {
 }
 
 func TestLineStringIntersects(t *testing.T) {
-
 	tests := []struct {
 		query  *LineString
 		other  index.GeoJSON
@@ -558,7 +556,6 @@ func TestLineStringIntersects(t *testing.T) {
 }
 
 func TestMultiLineStringIntersects(t *testing.T) {
-
 	tests := []struct {
 		query  *MultiLineString
 		other  index.GeoJSON
@@ -734,7 +731,6 @@ func TestMultiLineStringIntersects(t *testing.T) {
 }
 
 func TestLineStringContains(t *testing.T) {
-
 	tests := []struct {
 		query  *LineString
 		other  index.GeoJSON
@@ -790,7 +786,6 @@ func TestLineStringContains(t *testing.T) {
 }
 
 func TestMultiLineStringContains(t *testing.T) {
-
 	tests := []struct {
 		query  *MultiLineString
 		other  index.GeoJSON
@@ -1598,7 +1593,6 @@ func TestMultiPolygonContains(t *testing.T) {
 }
 
 func TestCircleIntersects(t *testing.T) {
-
 	tests := []struct {
 		query  *Circle
 		other  index.GeoJSON
@@ -1838,6 +1832,236 @@ func TestCircleContains(t *testing.T) {
 		},
 		{ // 20 - Envelope with no intersection
 			query:  NewGeoCircle([]float64{1, 1}, "100km").(*Circle),
+			other:  NewGeoEnvelope([][]float64{{4, 6}, {6, 4}}),
+			output: false,
+		},
+	}
+
+	for i, test := range tests {
+		result, err := test.query.Contains(test.other)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		if result != test.output {
+			t.Errorf("Test - %d, expected %v, got %v", i, test.output, result)
+		}
+	}
+}
+
+func TestEnvelopeIntersects(t *testing.T) {
+	tests := []struct {
+		query  *Envelope
+		other  index.GeoJSON
+		output bool
+	}{
+		{ // 0 - Point not in envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPoint([]float64{5, 5}),
+			output: false,
+		},
+		{ // 1 - Point inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPoint([]float64{1.2, 1.2}),
+			output: true,
+		},
+		{ // 2 - Multipoint with one point inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{5, 5}, {1.8, 1.8}}),
+			output: true,
+		},
+		{ // 3 - Multipoint with no points inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{5, 5}, {8, 8}}),
+			output: false,
+		},
+		{ // 4 - Multipoint with all points inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{1.1, 1.1}, {1.8, 1.8}}),
+			output: true,
+		},
+		{ // 5 - Linestring with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{5, 5}, {1.2, 1.8}}),
+			output: true,
+		},
+		{ // 6 - Linestring contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{1.8, 1.8}, {1.2, 1.2}}),
+			output: true,
+		},
+		{ // 7 - Linestring with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{5, 5}, {8, 8}}),
+			output: false,
+		},
+		{ // 8 - Multilinestring with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultilinestring([][][]float64{{{5, 5}, {1.8, 1.8}}, {{-5, -5}, {-2, -4}}}),
+			output: true,
+		},
+		{ // 9 - Multilinestring with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultilinestring([][][]float64{{{-5, -5}, {-2, -4}}, {{5, 5}, {8, 7}}}),
+			output: false,
+		},
+		{ // 10 - Polygon with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}}),
+			output: true,
+		},
+		{ // 11 - Polygon contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{1.1, 1.1}, {1.2, 1.1}, {1.2, 1.2}, {1.1, 1.2}, {1.1, 1.1}}}),
+			output: true,
+		},
+		{ // 12 - Polygon containing envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{0, 0}, {5, 0}, {5, 5}, {0, 5}, {0, 0}}}),
+			output: true,
+		},
+		{ // 13 - Polygon with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{-5, -5}, {-4, -5}, {-4, -4}, {-5, -4}, {-5, -5}}}),
+			output: false,
+		},
+		{ // 14 - MultiPolygon with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPolygon([][][][]float64{{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}}, {{{-5, -5}, {-4, -5}, {-4, -4}, {-5, -4}, {-5, -5}}}}),
+			output: true,
+		},
+		{ // 15 - MultiPolygon with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPolygon([][][][]float64{{{{-4, -4}, {-3, -4}, {-3, -3}, {-4, -3}, {-4, -4}}}, {{{-5, -5}, {-4, -5}, {-4, -4}, {-5, -4}, {-5, -5}}}}),
+			output: false,
+		},
+		{ // 16 - Circle with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoCircle([]float64{1.5, 1.5}, "100km"),
+			output: true,
+		},
+		{ // 17 - Circle with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoCircle([]float64{2.5, 2.5}, "1km"),
+			output: false,
+		},
+		{ // 18 - Envelope with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoEnvelope([][]float64{{0, 2}, {2, 0}}),
+			output: true,
+		},
+		{ //  - Envelope with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoEnvelope([][]float64{{4, 6}, {6, 4}}),
+			output: false,
+		},
+	}
+
+	for i, test := range tests {
+		result, err := test.query.Intersects(test.other)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		if result != test.output {
+			t.Errorf("Test - %d, expected %v, got %v", i, test.output, result)
+		}
+	}
+}
+
+func TestEnvelopeContains(t *testing.T) {
+	tests := []struct {
+		query  *Envelope
+		other  index.GeoJSON
+		output bool
+	}{
+		{ // 0 - Point not in envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPoint([]float64{5, 5}),
+			output: false,
+		},
+		{ // 1 - Point inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPoint([]float64{1.2, 1.2}),
+			output: true,
+		},
+		{ // 2 - Multipoint with one point inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{5, 5}, {1.8, 1.8}}),
+			output: false,
+		},
+		{ // 3 - Multipoint with no points inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{5, 5}, {8, 8}}),
+			output: false,
+		},
+		{ // 4 - Multipoint with all points inside envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPoint([][]float64{{1.1, 1.1}, {1.8, 1.8}}),
+			output: true,
+		},
+		{ // 5 - Linestring with intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{5, 5}, {1.2, 1.8}}),
+			output: false,
+		},
+		{ // 6 - Linestring contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{1.8, 1.8}, {1.2, 1.2}}),
+			output: true,
+		},
+		{ // 7 - Linestring with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonLinestring([][]float64{{5, 5}, {8, 8}}),
+			output: false,
+		},
+		{ // 8 - Multilinestring contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultilinestring([][][]float64{{{1.8, 1.8}, {1.2, 1.2}}, {{1.8, 1.2}, {1.2, 1.8}}}),
+			output: true,
+		},
+		{ // 9 - Multilinestring with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultilinestring([][][]float64{{{-5, -5}, {-2, -4}}, {{5, 5}, {8, 7}}}),
+			output: false,
+		},
+		{ // 10 - Polygon contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{1.1, 1.1}, {1.2, 1.1}, {1.2, 1.2}, {1.1, 1.2}, {1.1, 1.1}}}),
+			output: true,
+		},
+		{ // 11 - Polygon with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonPolygon([][][]float64{{{-5, -5}, {-4, -5}, {-4, -4}, {-5, -4}, {-5, -5}}}),
+			output: false,
+		},
+		{ // 12 - MultiPolygon contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPolygon([][][][]float64{{{{1.1, 1.1}, {1.2, 1.1}, {1.2, 1.2}, {1.1, 1.2}, {1.1, 1.1}}}, {{{1.2, 1.2}, {1.3, 1.2}, {1.3, 1.3}, {1.2, 1.3}, {1.2, 1.2}}}}),
+			output: true,
+		},
+		{ // 13 - MultiPolygon with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoJsonMultiPolygon([][][][]float64{{{{-4, -4}, {-3, -4}, {-3, -3}, {-4, -3}, {-4, -4}}}, {{{-5, -5}, {-4, -5}, {-4, -4}, {-5, -4}, {-5, -5}}}}),
+			output: false,
+		},
+		{ // 14 - Circle contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoCircle([]float64{1.5, 1.5}, "1km"),
+			output: true,
+		},
+		{ // 15 - Circle with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoCircle([]float64{2.5, 2.5}, "1km"),
+			output: false,
+		},
+		{ // 16 - Envelope contained by envelope
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
+			other:  NewGeoEnvelope([][]float64{{1.5, 1.25}, {1.25, 1.5}}),
+			output: true,
+		},
+		{ // 17 - Envelope with no intersection
+			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
 			other:  NewGeoEnvelope([][]float64{{4, 6}, {6, 4}}),
 			output: false,
 		},

@@ -171,27 +171,8 @@ func rectangleIntersectsWithPolygons(s2rect *s2.Rect,
 
 func rectangleIntersectsWithLineStrings(s2rect *s2.Rect,
 	polylines []*s2.Polyline) bool {
-	// Early exit path if the envelope contains any of the linestring's vertices.
-	for _, pl := range polylines {
-		for _, point := range *pl {
-			if s2rect.ContainsPoint(point) {
-				return true
-			}
-		}
-	}
-
-	for _, pl := range polylines {
-		for i := 0; i < 4; i++ {
-			pl2 := s2.PolylineFromLatLngs([]s2.LatLng{s2rect.Vertex(i),
-				s2rect.Vertex((i + 1) % 4)})
-
-			if pl.Intersects(pl2) {
-				return true
-			}
-		}
-	}
-
-	return false
+	s2pgnFromRect := s2PolygonFromS2Rectangle(s2rect)
+	return polylineIntersectsPolygons(polylines, []*s2.Polygon{s2pgnFromRect})
 }
 
 func s2PolygonFromCoordinates(coordinates [][][]float64) *s2.Polygon {
