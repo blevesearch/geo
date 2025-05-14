@@ -28,10 +28,18 @@ import (
 var jsoniter = jsoniterator.ConfigCompatibleWithStandardLibrary
 
 type GeoShape struct {
-	Type        string
+	// Type of the shape
+	Type string
+
+	// Coordinates of the shape
+	// Used for all shapes except Circles
 	Coordinates [][][][]float64
-	Radius      string
-	Center      []float64
+
+	// Radius of the circle
+	Radius string
+
+	// Center of the circle
+	Center []float64
 }
 
 // FilterGeoShapesOnRelation extracts the shapes in the document, apply
@@ -403,7 +411,6 @@ var GlueBytes = []byte("##")
 // can be used later while filering the doc values.
 func NewGeometryCollection(shapes []*GeoShape) (
 	index.GeoJSON, []byte, error) {
-	fmt.Println(shapes)
 	for _, shape := range shapes {
 		if shape == nil {
 			return nil, nil, fmt.Errorf("nil shape")
