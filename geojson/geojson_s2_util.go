@@ -53,6 +53,9 @@ func polylineIntersectsPolygons(pls []*s2.Polyline,
 	containsQuery := s2.NewContainsPointQuery(idx, s2.VertexModelClosed)
 	for _, pl := range pls {
 		for _, point := range *pl {
+
+			// Precheck points within the bounds of the polygon
+			// and for small polygons, check if the point is contained
 			for _, s2pgn := range s2pgns {
 				if !s2pgn.PointWithinBound(point) {
 					continue
