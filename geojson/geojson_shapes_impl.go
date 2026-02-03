@@ -1717,11 +1717,11 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a circle.
 	if c, ok := other.(*Circle); ok {
-		s2pgn := s2PolygonFromS2Rectangle(s2rect)
-		cp := c.s2cap.Center()
-		projected := s2pgn.Project(&cp)
-		distance := projected.Distance(cp)
-		return distance <= c.s2cap.Radius(), nil
+		if s2rect.DistanceToLatLng(s2.LatLngFromPoint(c.s2cap.Center())) <= c.s2cap.Radius() {
+			return true, nil
+		}
+
+		return false, nil
 	}
 
 	// check if the other shape is a envelope.
