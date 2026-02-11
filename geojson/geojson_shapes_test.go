@@ -1300,7 +1300,7 @@ func TestPolygonContains(t *testing.T) {
 		},
 		{ // 6 - Linestring contained by polygon
 			query:  &Polygon{Typ: PolygonType, Vertices: [][][]float64{{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}},
-			other:  NewGeoJsonLinestring([][]float64{{2, 2}, {1, 1}, {0, 1}}),
+			other:  NewGeoJsonLinestring([][]float64{{1, 2}, {1, 1}, {0, 1}}),
 			output: true,
 		},
 		{ // 7 - Linestring with no intersection
@@ -1320,7 +1320,7 @@ func TestPolygonContains(t *testing.T) {
 		},
 		{ // 10 - Multilinestring with both linestrings contained by polygon
 			query:  &Polygon{Typ: PolygonType, Vertices: [][][]float64{{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}},
-			other:  NewGeoJsonMultilinestring([][][]float64{{{2, 2}, {1, 1}, {0, 1}}, {{0.5, 0.5}, {0, 1}, {0.5, 1.5}}}),
+			other:  NewGeoJsonMultilinestring([][][]float64{{{1, 2}, {1, 1}, {0, 1}}, {{0.5, 0.5}, {0, 1}, {0.5, 1.5}}}),
 			output: true,
 		},
 		{ // 11 - Multilinestring with no intersection
@@ -1465,7 +1465,7 @@ func TestMultiPolygonContains(t *testing.T) {
 		},
 		{ // 6 - Linestring contained by polygon
 			query:  &MultiPolygon{Typ: MultiPolygonType, Vertices: [][][][]float64{{{{100, 100}, {100, 101}, {101, 101}, {101, 100}, {100, 100}}}, {{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}}},
-			other:  NewGeoJsonLinestring([][]float64{{2, 2}, {1, 1}, {0, 1}}),
+			other:  NewGeoJsonLinestring([][]float64{{1, 2}, {1, 1}, {0, 1}}),
 			output: true,
 		},
 		{ // 7 - Linestring with no intersection
@@ -1485,7 +1485,7 @@ func TestMultiPolygonContains(t *testing.T) {
 		},
 		{ // 10 - Multilinestring with both linestrings contained by polygon
 			query:  &MultiPolygon{Typ: MultiPolygonType, Vertices: [][][][]float64{{{{100, 100}, {100, 101}, {101, 101}, {101, 100}, {100, 100}}}, {{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}}},
-			other:  NewGeoJsonMultilinestring([][][]float64{{{2, 2}, {1, 1}, {0, 1}}, {{0.5, 0.5}, {0, 1}, {0.5, 1.5}}}),
+			other:  NewGeoJsonMultilinestring([][][]float64{{{1, 2}, {1, 1}, {0, 1}}, {{0.5, 0.5}, {0, 1}, {0.5, 1.5}}}),
 			output: true,
 		},
 		{ // 11 - Multilinestring with no intersection

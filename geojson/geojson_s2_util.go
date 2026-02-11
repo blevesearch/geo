@@ -136,24 +136,24 @@ func geometryCollectionIntersectsShape(gc *GeometryCollection,
 
 func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 	pls []*s2.Polyline) bool {
-	linesWithIn := make(map[int]struct{})
 	checker := s2.NewCrossingEdgeQuery(s2.NewShapeIndex())
-nextLine:
-	for lineIndex, pl := range pls {
+
+	for _, pl := range pls {
 		for i := 0; i < len(*pl)-1; i++ {
 			start := (*pl)[i]
 			end := (*pl)[i+1]
 
+			contains := false
 			for _, s2pgn := range s2pgns {
 				containsStart := s2pgn.ContainsPoint(start)
 				containsEnd := s2pgn.ContainsPoint(end)
 				if containsStart && containsEnd {
 					crossings := checker.Crossings(start, end, s2pgn, s2.CrossingTypeInterior)
 					if len(crossings) > 0 {
-						continue nextLine
+						continue
 					}
-					linesWithIn[lineIndex] = struct{}{}
-					continue nextLine
+					contains = true
+					break
 				} else {
 					for _, loop := range s2pgn.Loops() {
 						for i := 0; i < loop.NumVertices(); i++ {
@@ -163,17 +163,20 @@ nextLine:
 								containsEnd = true
 							}
 							if containsStart && containsEnd {
-								linesWithIn[lineIndex] = struct{}{}
-								continue nextLine
+								contains = true
+								break
 							}
 						}
 					}
 				}
 			}
+			if !contains {
+				return false
+			}
 		}
 	}
 
-	return len(pls) == len(linesWithIn)
+	return true
 }
 
 func rectangleIntersectsWithPolygons(s2rect *s2.Rect,
