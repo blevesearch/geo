@@ -1717,7 +1717,10 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 
 	// check if the other shape is a circle.
 	if c, ok := other.(*Circle); ok {
-		if s2rect.DistanceToLatLng(s2.LatLngFromPoint(c.s2cap.Center())) <= c.s2cap.Radius() {
+		// check if the distance of the center of the circle from the
+		// rectangle is less than the radius of the circle.
+		if s2rect.DistanceToLatLng(s2.LatLngFromPoint(c.s2cap.Center())) <=
+			c.s2cap.Radius() {
 			return true, nil
 		}
 
