@@ -138,6 +138,8 @@ func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 	pls []*s2.Polyline) bool {
 	checker := s2.NewCrossingEdgeQuery(s2.NewShapeIndex())
 
+	// Every line segment in every linestring must be
+	// fully contained in atleast one of the polygons
 	for _, pl := range pls {
 		for i := 0; i < len(*pl)-1; i++ {
 			start := (*pl)[i]
@@ -147,6 +149,8 @@ func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 			for _, s2pgn := range s2pgns {
 				containsStart := s2pgn.ContainsPoint(start)
 				containsEnd := s2pgn.ContainsPoint(end)
+				// check if both end points are contained and if so,
+				// check if the line segment between them crosses the boundary of the polygon
 				if containsStart && containsEnd {
 					crossings := checker.Crossings(start, end, s2pgn, s2.CrossingTypeInterior)
 					if len(crossings) > 0 {
@@ -155,11 +159,13 @@ func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 					contains = true
 					break
 				} else {
+					// else we check if the line segment is an edge of the polygon
 					for _, loop := range s2pgn.Loops() {
 						for i := 0; i < loop.NumVertices(); i++ {
 							if !containsStart && start.ApproxEqual(loop.Vertex(i)) {
 								containsStart = true
-							} else if !containsEnd && end.ApproxEqual(loop.Vertex(i)) {
+							}
+							if !containsEnd && end.ApproxEqual(loop.Vertex(i)) {
 								containsEnd = true
 							}
 							if containsStart && containsEnd {
