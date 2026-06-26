@@ -139,6 +139,20 @@ func (p *Point) Coordinates() []float64 {
 	return p.Vertices
 }
 
+func (p *Point) Cells() (inner, cross []uint64) {
+	if p.s2point == nil {
+		return nil, nil
+	}
+	return nil, []uint64{pointCell(*p.s2point)}
+}
+
+func (p *Point) BoundingBox() index.GeoJSON {
+	if p.s2point == nil {
+		return nil
+	}
+	return envelopeFromRect(p.s2point.RectBound())
+}
+
 // --------------------------------------------------------
 // MultiPoint represents the geoJSON multipoint type and it
 // implements the index.GeoJSON interface as well as the
@@ -243,6 +257,28 @@ func (p *MultiPoint) Members() []index.GeoJSON {
 	return points
 }
 
+func (mp *MultiPoint) Cells() (inner, cross []uint64) {
+	cross = make([]uint64, 0, len(mp.s2points))
+	for _, pt := range mp.s2points {
+		if pt == nil {
+			continue
+		}
+		cross = append(cross, pointCell(*pt))
+	}
+	return nil, cross
+}
+
+func (mp *MultiPoint) BoundingBox() index.GeoJSON {
+	r := s2.EmptyRect()
+	for _, pt := range mp.s2points {
+		if pt == nil {
+			continue
+		}
+		r = r.Union(pt.RectBound())
+	}
+	return envelopeFromRect(r)
+}
+
 // --------------------------------------------------------
 // LineString represents the geoJSON linestring type and it
 // implements the index.GeoJSON interface.
@@ -304,6 +340,20 @@ func (ls *LineString) Contains(other index.GeoJSON) (bool, error) {
 
 func (ls *LineString) Coordinates() [][]float64 {
 	return ls.Vertices
+}
+
+func (ls *LineString) Cells() (inner, cross []uint64) {
+	if ls.pl == nil {
+		return nil, nil
+	}
+	return cellsFromRegion(ls.pl) // polyline has no area: all cross
+}
+
+func (ls *LineString) BoundingBox() index.GeoJSON {
+	if ls.pl == nil {
+		return nil
+	}
+	return envelopeFromRect(ls.pl.RectBound())
 }
 
 // --------------------------------------------------------
@@ -391,6 +441,29 @@ func (p *MultiLineString) Members() []index.GeoJSON {
 	return lines
 }
 
+func (mls *MultiLineString) Cells() (inner, cross []uint64) {
+	ru := make(s2.RegionUnion, 0, len(mls.pls))
+	for _, pl := range mls.pls {
+		if pl != nil {
+			ru = append(ru, pl)
+		}
+	}
+	if len(ru) == 0 {
+		return nil, nil
+	}
+	return cellsFromRegion(ru) // all cross
+}
+
+func (mls *MultiLineString) BoundingBox() index.GeoJSON {
+	r := s2.EmptyRect()
+	for _, pl := range mls.pls {
+		if pl != nil {
+			r = r.Union(pl.RectBound())
+		}
+	}
+	return envelopeFromRect(r)
+}
+
 // --------------------------------------------------------
 // Polygon represents the geoJSON polygon type
 // and it implements the index.GeoJSON interface.
@@ -451,6 +524,20 @@ func (p *Polygon) Contains(other index.GeoJSON) (bool, error) {
 
 func (p *Polygon) Coordinates() [][][]float64 {
 	return p.Vertices
+}
+
+func (pg *Polygon) Cells() (inner, cross []uint64) {
+	if pg.s2pgn == nil {
+		return nil, nil
+	}
+	return cellsFromRegion(pg.s2pgn)
+}
+
+func (pg *Polygon) BoundingBox() index.GeoJSON {
+	if pg.s2pgn == nil {
+		return nil
+	}
+	return envelopeFromRect(pg.s2pgn.RectBound())
 }
 
 // --------------------------------------------------------
@@ -549,6 +636,29 @@ func (p *MultiPolygon) Members() []index.GeoJSON {
 		polygons[pos] = &Polygon{s2pgn: pgn}
 	}
 	return polygons
+}
+
+func (mp *MultiPolygon) Cells() (inner, cross []uint64) {
+	ru := make(s2.RegionUnion, 0, len(mp.s2pgns))
+	for _, pg := range mp.s2pgns {
+		if pg != nil {
+			ru = append(ru, pg)
+		}
+	}
+	if len(ru) == 0 {
+		return nil, nil
+	}
+	return cellsFromRegion(ru)
+}
+
+func (mp *MultiPolygon) BoundingBox() index.GeoJSON {
+	r := s2.EmptyRect()
+	for _, pg := range mp.s2pgns {
+		if pg != nil {
+			r = r.Union(pg.RectBound())
+		}
+	}
+	return envelopeFromRect(r)
 }
 
 // --------------------------------------------------------
@@ -652,6 +762,34 @@ func (gc *GeometryCollection) Contains(other index.GeoJSON) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (gc *GeometryCollection) Cells() (inner, cross []uint64) {
+	for _, s := range gc.Shapes {
+		if s == nil {
+			continue
+		}
+		in, cr := s.Cells()
+		inner = append(inner, in...)
+		cross = append(cross, cr...)
+	}
+	return inner, cross
+}
+
+func (gc *GeometryCollection) BoundingBox() index.GeoJSON {
+	r := s2.EmptyRect()
+	for _, s := range gc.Shapes {
+		if s == nil {
+			continue
+		}
+		// Reads the rect out of each child's bounding box. The concrete type
+		// here must match whatever <child>.BoundingBox() actually returns;
+		// adjust the assertion if your envelope lives in another package.
+		if env, ok := s.BoundingBox().(*Envelope); ok && env != nil && env.r != nil {
+			r = r.Union(*env.r)
+		}
+	}
+	return envelopeFromRect(r)
 }
 
 func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
@@ -846,6 +984,20 @@ func (c *Circle) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+func (c *Circle) Cells() (inner, cross []uint64) {
+	if c.s2cap == nil {
+		return nil, nil
+	}
+	return cellsFromRegion(*c.s2cap) // Cap value implements Region
+}
+
+func (c *Circle) BoundingBox() index.GeoJSON {
+	if c.s2cap == nil {
+		return nil
+	}
+	return envelopeFromRect(c.s2cap.RectBound())
+}
+
 // --------------------------------------------------------
 // Envelope represents the  envelope/bounding box type and it
 // implements the index.GeoJSON interface.
@@ -901,6 +1053,20 @@ func (e *Envelope) Contains(other index.GeoJSON) (bool, error) {
 	e.init()
 
 	return checkEnvelopeContainsShape(e.r, e, other)
+}
+
+func (e *Envelope) Cells() (inner, cross []uint64) {
+	if e.r == nil {
+		return nil, nil
+	}
+	return cellsFromRegion(*e.r) // Rect value implements Region
+}
+
+func (e *Envelope) BoundingBox() index.GeoJSON {
+	if e.r == nil {
+		return nil
+	}
+	return envelopeFromRect(*e.r) // an envelope's bbox is itself
 }
 
 //--------------------------------------------------------

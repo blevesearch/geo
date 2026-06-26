@@ -48,7 +48,7 @@ type GeoShape struct {
 func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
 	relation string, reader **bytes.Reader, bufPool *s2.GeoBufferPool) (bool, error) {
 
-	shapeInDoc, err := extractShapesFromBytes(targetShapeBytes, reader, bufPool)
+	shapeInDoc, err := ExtractShapesFromBytes(targetShapeBytes, reader, bufPool)
 	if err != nil {
 		return false, err
 	}
@@ -56,9 +56,9 @@ func FilterGeoShapesOnRelation(shape index.GeoJSON, targetShapeBytes []byte,
 	return filterShapes(shape, shapeInDoc, relation)
 }
 
-// extractShapesFromBytes unmarshal the bytes to retrieve the
+// ExtractShapesFromBytes unmarshal the bytes to retrieve the
 // embedded geojson shape.
-func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *s2.GeoBufferPool) (
+func ExtractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *s2.GeoBufferPool) (
 	index.GeoJSON, error) {
 	if (*r) == nil {
 		*r = bytes.NewReader(targetShapeBytes[1:])
@@ -171,7 +171,7 @@ func extractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *
 		gc := &GeometryCollection{Shapes: make([]index.GeoJSON, numShapes)}
 
 		for i := int32(0); i < numShapes; i++ {
-			shape, err := extractShapesFromBytes(inputBytes[:lengths[i]], r, nil)
+			shape, err := ExtractShapesFromBytes(inputBytes[:lengths[i]], r, nil)
 			if err != nil {
 				return nil, err
 			}
