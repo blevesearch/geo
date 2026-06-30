@@ -19,8 +19,16 @@ import "github.com/blevesearch/geo/s2"
 var (
 	MinLevel = 0
 	MaxLevel = 18
+	LevelMod = 1
 	MaxCells = 100
 )
+
+var regionCovererV2 = &s2.RegionCoverer{
+	MinLevel: MinLevel,
+	MaxLevel: MaxLevel,
+	LevelMod: LevelMod,
+	MaxCells: MaxCells,
+}
 
 // pointCell returns the single maxLevel cell that contains a point.
 func pointCell(p s2.Point) uint64 {
@@ -43,14 +51,6 @@ func envelopeFromRect(r s2.Rect) *Envelope {
 	}
 }
 
-func newCoverer() *s2.RegionCoverer {
-	return &s2.RegionCoverer{
-		MinLevel: MinLevel,
-		MaxLevel: MaxLevel,
-		MaxCells: MaxCells,
-	}
-}
-
 // cellsFromRegion covers any s2.Region and partitions the single covering into
 // inner cells (region fully contains the cell) and cross cells (boundary cells).
 //
@@ -59,7 +59,9 @@ func newCoverer() *s2.RegionCoverer {
 // RegionUnion of those) ContainsCell is always false, so every cell is a cross
 // cell and inner is nil — exactly what the index expects for arealess shapes.
 func cellsFromRegion(region s2.Region) (inner, cross []uint64) {
-	covering := newCoverer().Covering(region)
+	covering := regionCovererV2.Covering(region)
+	inner = make([]uint64, 0, len(covering))
+	cross = make([]uint64, 0, len(covering))
 	for _, id := range covering {
 		if region.ContainsCell(s2.CellFromCellID(id)) {
 			inner = append(inner, uint64(id))
