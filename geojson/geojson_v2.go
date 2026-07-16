@@ -21,7 +21,7 @@ var (
 	MaxLevel      = 18
 	LevelMod      = 1
 	MaxIndexCells = 200
-	MaxQueryCells = 400
+	MaxQueryCells = 1000
 )
 
 var regionCovererIndexV2 = &s2.RegionCoverer{
