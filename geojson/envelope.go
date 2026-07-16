@@ -84,7 +84,14 @@ func (e *Envelope) Cells() (inner, cross []uint64) {
 	if e.r == nil {
 		return nil, nil
 	}
-	return cellsFromRegion(*e.r) // Rect value implements Region
+	return indexCellsFromRegion(*e.r)
+}
+
+func (e *Envelope) QueryCells() ([]uint64, []uint64) {
+	if e.r == nil {
+		return nil, nil
+	}
+	return queryCellsFromRegion(*e.r)
 }
 
 func (e *Envelope) BoundingBox() index.GeoJSON {

@@ -139,6 +139,18 @@ func (gc *GeometryCollection) Cells() (inner, cross []uint64) {
 	return inner, cross
 }
 
+func (gc *GeometryCollection) QueryCells() (inner []uint64, cross []uint64) {
+	for _, s := range gc.Shapes {
+		if s == nil {
+			continue
+		}
+		in, cr := s.QueryCells()
+		inner = append(inner, in...)
+		cross = append(cross, cr...)
+	}
+	return inner, cross
+}
+
 func (gc *GeometryCollection) BoundingBox() index.GeoJSON {
 	r := s2.EmptyRect()
 	for _, s := range gc.Shapes {

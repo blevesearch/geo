@@ -92,7 +92,14 @@ func (ls *LineString) Cells() (inner, cross []uint64) {
 	if ls.pl == nil {
 		return nil, nil
 	}
-	return cellsFromRegion(ls.pl)
+	return indexCellsFromRegion(ls.pl)
+}
+
+func (ls *LineString) QueryCells() ([]uint64, []uint64) {
+	if ls.pl == nil {
+		return nil, nil
+	}
+	return queryCellsFromRegion(ls.pl)
 }
 
 func (ls *LineString) BoundingBox() index.GeoJSON {
@@ -198,7 +205,20 @@ func (mls *MultiLineString) Cells() (inner, cross []uint64) {
 	if len(ru) == 0 {
 		return nil, nil
 	}
-	return cellsFromRegion(ru)
+	return indexCellsFromRegion(ru)
+}
+
+func (mls *MultiLineString) QueryCells() (inner []uint64, cross []uint64) {
+	ru := make(s2.RegionUnion, 0, len(mls.pls))
+	for _, pl := range mls.pls {
+		if pl != nil {
+			ru = append(ru, pl)
+		}
+	}
+	if len(ru) == 0 {
+		return nil, nil
+	}
+	return queryCellsFromRegion(ru)
 }
 
 func (mls *MultiLineString) BoundingBox() index.GeoJSON {

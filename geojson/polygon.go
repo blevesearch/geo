@@ -90,7 +90,14 @@ func (pg *Polygon) Cells() (inner, cross []uint64) {
 	if pg.s2pgn == nil {
 		return nil, nil
 	}
-	return cellsFromRegion(pg.s2pgn)
+	return indexCellsFromRegion(pg.s2pgn)
+}
+
+func (pg *Polygon) QueryCells() ([]uint64, []uint64) {
+	if pg.s2pgn == nil {
+		return nil, nil
+	}
+	return queryCellsFromRegion(pg.s2pgn)
 }
 
 func (pg *Polygon) BoundingBox() index.GeoJSON {
@@ -208,7 +215,20 @@ func (mp *MultiPolygon) Cells() (inner, cross []uint64) {
 	if len(ru) == 0 {
 		return nil, nil
 	}
-	return cellsFromRegion(ru)
+	return indexCellsFromRegion(ru)
+}
+
+func (mp *MultiPolygon) QueryCells() ([]uint64, []uint64) {
+	ru := make(s2.RegionUnion, 0, len(mp.s2pgns))
+	for _, pg := range mp.s2pgns {
+		if pg != nil {
+			ru = append(ru, pg)
+		}
+	}
+	if len(ru) == 0 {
+		return nil, nil
+	}
+	return queryCellsFromRegion(ru)
 }
 
 func (mp *MultiPolygon) BoundingBox() index.GeoJSON {

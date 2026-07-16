@@ -116,7 +116,14 @@ func (c *Circle) Cells() (inner, cross []uint64) {
 	if c.s2cap == nil {
 		return nil, nil
 	}
-	return cellsFromRegion(*c.s2cap) // Cap value implements Region
+	return indexCellsFromRegion(*c.s2cap)
+}
+
+func (c *Circle) QueryCells() ([]uint64, []uint64) {
+	if c.s2cap == nil {
+		return nil, nil
+	}
+	return queryCellsFromRegion(*c.s2cap)
 }
 
 func (c *Circle) BoundingBox() index.GeoJSON {

@@ -95,6 +95,10 @@ func (p *Point) Cells() (inner, cross []uint64) {
 	return nil, []uint64{pointCell(*p.s2point)}
 }
 
+func (p *Point) QueryCells() ([]uint64, []uint64) {
+	return p.Cells() // Point can only have a single cross cell
+}
+
 func (p *Point) BoundingBox() index.GeoJSON {
 	if p.s2point == nil {
 		return nil
@@ -216,6 +220,10 @@ func (mp *MultiPoint) Cells() (inner, cross []uint64) {
 		cross = append(cross, pointCell(*pt))
 	}
 	return nil, cross
+}
+
+func (mp *MultiPoint) QueryCells() ([]uint64, []uint64) {
+	return mp.Cells() // MultiPoint can only have cross cells
 }
 
 func (mp *MultiPoint) BoundingBox() index.GeoJSON {
