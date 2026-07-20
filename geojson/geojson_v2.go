@@ -20,8 +20,8 @@ import "github.com/blevesearch/geo/s2"
 // compile-time constants: the two coverers below capture them at package
 // init, so runtime mutation would have no effect.
 const (
-	minCellLevel  = 0
-	maxCellLevel  = 18
+	minCellLevel  = 6
+	maxCellLevel  = 14
 	cellLevelMod  = 1
 	maxIndexCells = 200
 	maxQueryCells = 1000
