@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	index "github.com/blevesearch/bleve_index_api"
+	"github.com/blevesearch/geo/s2"
 )
 
 func TestPointIntersects(t *testing.T) {
@@ -76,7 +77,7 @@ func TestPointIntersects(t *testing.T) {
 			other:      NewGeoJsonPolygon([][][]float64{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}, {{-0.5, -0.5}, {-0.5, 0.5}, {0.5, 0.5}, {0.5, -0.5}, {-0.5, -0.5}}}),
 			output:     false,
 		},
-		{ // 10 - MulitiPolygon with point
+		{ // 10 - MultiPolygon with point
 			queryPoint: &Point{Typ: PointType, Vertices: []float64{2.5, 2.5}},
 			other:      NewGeoJsonMultiPolygon([][][][]float64{{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}}, {{{2, 2}, {3, 2}, {3, 3}, {2, 3}, {2, 2}}}}),
 			output:     true,
@@ -201,7 +202,7 @@ func TestMultiPointIntersects(t *testing.T) {
 			other:      NewGeoJsonPolygon([][][]float64{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}}),
 			output:     true,
 		},
-		{ // 8 - Polygon with point on the vertex
+		{ // 8 - Polygon with point on the edge
 			queryPoint: &MultiPoint{Typ: MultiPointType, Vertices: [][]float64{{-0.5, -1}, {4, 4}}},
 			other:      NewGeoJsonPolygon([][][]float64{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}}),
 			output:     true,
@@ -211,7 +212,7 @@ func TestMultiPointIntersects(t *testing.T) {
 			other:      NewGeoJsonPolygon([][][]float64{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}, {{-0.5, -0.5}, {-0.5, 0.5}, {0.5, 0.5}, {0.5, -0.5}, {-0.5, -0.5}}}),
 			output:     false,
 		},
-		{ // 10 - MulitiPolygon with point
+		{ // 10 - MultiPolygon with point
 			queryPoint: &MultiPoint{Typ: MultiPointType, Vertices: [][]float64{{4, 4}, {0, 0}}},
 			other:      NewGeoJsonMultiPolygon([][][][]float64{{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}, {-1, -1}}}, {{{2, 2}, {3, 2}, {3, 3}, {2, 3}, {2, 2}}}}),
 			output:     true,
@@ -376,6 +377,90 @@ func TestMultiPointContains(t *testing.T) {
 
 		if result != test.output {
 			t.Errorf("Test - %d, expected %v, got %v", i, test.output, result)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// geo shape v2 cell tests
+
+func TestPointCells(t *testing.T) {
+	p := NewGeoJsonPoint([]float64{4.5, 22.5}).(*Point)
+
+	inner, cross := p.IndexCells()
+	if len(inner) != 0 {
+		t.Fatalf("expected no inner cells for a point, got %v", inner)
+	}
+	if len(cross) != 1 {
+		t.Fatalf("expected exactly one cross cell for a point, got %v", cross)
+	}
+	if cross[0] != pointCell(*p.s2point) {
+		t.Fatalf("expected cross cell %d, got %d", pointCell(*p.s2point), cross[0])
+	}
+	if !cellsCoverLatLng(cross, 22.5, 4.5) {
+		t.Fatal("the point's cell does not cover the point")
+	}
+
+	// query cells must be identical to index cells for a point
+	qInner, qCross := p.QueryCells()
+	if len(qInner) != 0 || len(qCross) != 1 || qCross[0] != cross[0] {
+		t.Fatalf("expected query cells to equal index cells, got %v %v",
+			qInner, qCross)
+	}
+}
+
+func TestPointBoundingBox(t *testing.T) {
+	p := NewGeoJsonPoint([]float64{4.5, 22.5}).(*Point)
+
+	env, ok := p.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", p.BoundingBox())
+	}
+	// a point's bounding box is degenerate: lo == hi == the point
+	if !env.r.ContainsLatLng(s2.LatLngFromDegrees(22.5, 4.5)) {
+		t.Fatal("bounding box does not contain the point")
+	}
+	if !rectsApproxEqual(*env.r, s2.RectFromLatLng(s2.LatLngFromDegrees(22.5, 4.5))) {
+		t.Fatalf("expected a degenerate rect at the point, got %v", env.r)
+	}
+}
+
+func TestMultiPointCells(t *testing.T) {
+	// two distinct points plus an exact duplicate of the first: the
+	// duplicate must be deduplicated away
+	mp := NewGeoJsonMultiPoint([][]float64{{1, 1}, {50, 50}, {1, 1}}).(*MultiPoint)
+
+	inner, cross := mp.IndexCells()
+	if len(inner) != 0 {
+		t.Fatalf("expected no inner cells for a multipoint, got %v", inner)
+	}
+	if len(cross) != 2 {
+		t.Fatalf("expected two deduplicated cross cells, got %v", cross)
+	}
+	for _, ll := range [][2]float64{{1, 1}, {50, 50}} {
+		if !cellsCoverLatLng(cross, ll[0], ll[1]) {
+			t.Fatalf("cells do not cover point (%v, %v)", ll[0], ll[1])
+		}
+	}
+
+	// query cells must be identical to index cells for a multipoint
+	qInner, qCross := mp.QueryCells()
+	if len(qInner) != 0 || len(qCross) != len(cross) {
+		t.Fatalf("expected query cells to equal index cells, got %v %v",
+			qInner, qCross)
+	}
+}
+
+func TestMultiPointBoundingBox(t *testing.T) {
+	mp := NewGeoJsonMultiPoint([][]float64{{1, 1}, {50, 50}}).(*MultiPoint)
+
+	env, ok := mp.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", mp.BoundingBox())
+	}
+	for _, ll := range [][2]float64{{1, 1}, {50, 50}} {
+		if !rectContainsDegrees(*env.r, ll[0], ll[1]) {
+			t.Fatalf("bounding box does not contain point (%v, %v)", ll[0], ll[1])
 		}
 	}
 }

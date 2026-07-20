@@ -276,3 +276,63 @@ func TestCircleContains(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// geo shape v2 cell tests
+
+func TestCircleCells(t *testing.T) {
+	small := NewGeoCircle([]float64{10, 10}, "10km").(*Circle)
+	big := NewGeoCircle([]float64{10, 10}, "500km").(*Circle)
+
+	for _, c := range []*Circle{small, big} {
+		inner, cross := c.IndexCells()
+		if len(inner)+len(cross) == 0 {
+			t.Fatalf("expected cells for circle with radius %s, got none", c.Radius)
+		}
+		verifyCellPartition(t, *c.s2cap, inner, cross)
+
+		// the circle's center must be covered
+		if !cellsCoverLatLng(append(inner, cross...), 10, 10) {
+			t.Fatalf("covering of circle with radius %s does not cover its center",
+				c.Radius)
+		}
+	}
+
+	// the bigger circle's bounding box must contain the smaller one's
+	smallEnv := small.BoundingBox().(*Envelope)
+	bigEnv := big.BoundingBox().(*Envelope)
+	if !bigEnv.r.Union(*smallEnv.r).ApproxEqual(*bigEnv.r) {
+		t.Fatal("expected the 500km circle's bounding box to contain the 10km one's")
+	}
+}
+
+// TestCircleUnmarshalCells is a regression test: a circle built through
+// UnmarshalJSON must lazily initialize its cap when the v2 methods are
+// invoked, rather than silently returning nil cells.
+func TestCircleUnmarshalCells(t *testing.T) {
+	data := []byte(`{"type": "circle", "coordinates": [2.29, 48.85], "radius": "100km"}`)
+
+	var c Circle
+	if err := c.UnmarshalJSON(data); err != nil {
+		t.Fatal(err)
+	}
+
+	inner, cross := c.IndexCells()
+	if len(inner)+len(cross) == 0 {
+		t.Fatal("expected cells for an unmarshalled circle, got none")
+	}
+	if !cellsCoverLatLng(append(inner, cross...), 48.85, 2.29) {
+		t.Fatal("covering does not cover the circle's center")
+	}
+
+	env, ok := c.BoundingBox().(*Envelope)
+	if !ok || env.r == nil || env.r.IsEmpty() {
+		t.Fatalf("expected a non-empty bounding box, got %v", c.BoundingBox())
+	}
+}
+
+func TestNewGeoCircleInvalidRadius(t *testing.T) {
+	if rv := NewGeoCircle([]float64{10, 10}, "10lightyears"); rv != nil {
+		t.Fatalf("expected nil for an invalid radius, got %v", rv)
+	}
+}

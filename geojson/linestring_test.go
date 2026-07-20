@@ -479,3 +479,112 @@ func TestMultiLineStringContains(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// geo shape v2 cell tests
+
+func TestLineStringCells(t *testing.T) {
+	ls := NewGeoJsonLinestring([][]float64{{0, 0}, {10, 10}, {20, 10}}).(*LineString)
+
+	inner, cross := ls.IndexCells()
+	if len(inner) != 0 {
+		t.Fatalf("expected no inner cells for a linestring, got %v", inner)
+	}
+	if len(cross) == 0 {
+		t.Fatal("expected cross cells for a linestring, got none")
+	}
+	verifyCellPartition(t, ls.pl, inner, cross)
+
+	// every vertex of the line must be covered; vertices are (lng, lat)
+	for _, v := range ls.Vertices {
+		if !cellsCoverLatLng(cross, v[1], v[0]) {
+			t.Fatalf("cells do not cover vertex (%v, %v)", v[0], v[1])
+		}
+	}
+
+	// the query covering must also be all-cross, and at least as fine
+	qInner, qCross := ls.QueryCells()
+	if len(qInner) != 0 {
+		t.Fatalf("expected no inner query cells for a linestring, got %v", qInner)
+	}
+	if len(qCross) < len(cross) {
+		t.Fatalf("expected the query covering (%d cells) to be at least as "+
+			"fine as the index covering (%d cells)", len(qCross), len(cross))
+	}
+}
+
+func TestLineStringBoundingBox(t *testing.T) {
+	ls := NewGeoJsonLinestring([][]float64{{0, 0}, {10, 10}, {20, 10}}).(*LineString)
+
+	env, ok := ls.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", ls.BoundingBox())
+	}
+	for _, v := range ls.Vertices {
+		if !rectContainsDegrees(*env.r, v[1], v[0]) {
+			t.Fatalf("bounding box does not contain vertex (%v, %v)", v[0], v[1])
+		}
+	}
+}
+
+func TestMultiLineStringCells(t *testing.T) {
+	// two segments far apart: the union covering must cover both
+	mls := NewGeoJsonMultilinestring([][][]float64{
+		{{0, 0}, {5, 5}},
+		{{50, 50}, {55, 55}},
+	}).(*MultiLineString)
+
+	inner, cross := mls.IndexCells()
+	if len(inner) != 0 {
+		t.Fatalf("expected no inner cells for a multilinestring, got %v", inner)
+	}
+	for _, ll := range [][2]float64{{0, 0}, {5, 5}, {50, 50}, {55, 55}} {
+		if !cellsCoverLatLng(cross, ll[0], ll[1]) {
+			t.Fatalf("cells do not cover segment endpoint (%v, %v)", ll[0], ll[1])
+		}
+	}
+
+	qInner, qCross := mls.QueryCells()
+	if len(qInner) != 0 {
+		t.Fatalf("expected no inner query cells, got %v", qInner)
+	}
+	if len(qCross) < len(cross) {
+		t.Fatalf("expected the query covering (%d cells) to be at least as "+
+			"fine as the index covering (%d cells)", len(qCross), len(cross))
+	}
+}
+
+func TestMultiLineStringBoundingBox(t *testing.T) {
+	mls := NewGeoJsonMultilinestring([][][]float64{
+		{{0, 0}, {5, 5}},
+		{{50, 50}, {55, 55}},
+	}).(*MultiLineString)
+
+	env, ok := mls.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", mls.BoundingBox())
+	}
+	for _, ll := range [][2]float64{{0, 0}, {5, 5}, {50, 50}, {55, 55}} {
+		if !rectContainsDegrees(*env.r, ll[0], ll[1]) {
+			t.Fatalf("bounding box does not contain endpoint (%v, %v)", ll[0], ll[1])
+		}
+	}
+}
+
+func TestEmptyMultiLineStringCells(t *testing.T) {
+	mls := &MultiLineString{Typ: MultiLineStringType}
+
+	inner, cross := mls.IndexCells()
+	if len(inner) != 0 || len(cross) != 0 {
+		t.Fatalf("expected no cells for an empty multilinestring, got %v %v",
+			inner, cross)
+	}
+
+	env, ok := mls.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", mls.BoundingBox())
+	}
+	if !env.r.IsEmpty() {
+		t.Fatalf("expected an empty rect for an empty multilinestring, got %v", env.r)
+	}
+}

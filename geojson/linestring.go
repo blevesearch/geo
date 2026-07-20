@@ -33,6 +33,7 @@ type LineString struct {
 	pl       *s2.Polyline
 }
 
+// NewGeoJsonLinestring instantiates a LineString from the given coordinates.
 func NewGeoJsonLinestring(points [][]float64) index.GeoJSON {
 	rv := &LineString{Typ: LineStringType, Vertices: points}
 	rv.init()
@@ -87,15 +88,20 @@ func (ls *LineString) Coordinates() [][]float64 {
 	return ls.Vertices
 }
 
-// LineStrings can only contain cross cells
-func (ls *LineString) Cells() (inner, cross []uint64) {
+// IndexCells returns the linestring's covering: a polyline has no area, so
+// every covering cell is a cross cell and inner is always nil.
+func (ls *LineString) IndexCells() (inner, cross []uint64) {
+	ls.init()
 	if ls.pl == nil {
 		return nil, nil
 	}
 	return indexCellsFromRegion(ls.pl)
 }
 
-func (ls *LineString) QueryCells() ([]uint64, []uint64) {
+// QueryCells returns the linestring's query-time covering; like IndexCells,
+// it can only contain cross cells.
+func (ls *LineString) QueryCells() (inner, cross []uint64) {
+	ls.init()
 	if ls.pl == nil {
 		return nil, nil
 	}
@@ -103,22 +109,35 @@ func (ls *LineString) QueryCells() ([]uint64, []uint64) {
 }
 
 func (ls *LineString) BoundingBox() index.GeoJSON {
+	ls.init()
 	if ls.pl == nil {
-		return nil
+		return envelopeFromRect(s2.EmptyRect())
 	}
 	return envelopeFromRect(ls.pl.RectBound())
+}
+
+func (ls *LineString) IndexTokens(s *s2.RegionTermIndexer) []string {
+	ls.init()
+	return StripCoveringTerms(s.GetIndexTermsForRegion(ls.pl.CapBound(), ""))
+}
+
+func (ls *LineString) QueryTokens(s *s2.RegionTermIndexer) []string {
+	ls.init()
+	return StripCoveringTerms(s.GetQueryTermsForRegion(ls.pl.CapBound(), ""))
 }
 
 // --------------------------------------------------------
 // MultiLineString represents the geoJSON multilinestring type
 // and it implements the index.GeoJSON interface as well as the
-// compositeShap interface.
+// compositeShape interface.
 type MultiLineString struct {
 	Typ      string        `json:"type"`
 	Vertices [][][]float64 `json:"coordinates"`
 	pls      []*s2.Polyline
 }
 
+// NewGeoJsonMultilinestring instantiates a MultiLineString from the given
+// coordinates.
 func NewGeoJsonMultilinestring(points [][][]float64) index.GeoJSON {
 	rv := &MultiLineString{Typ: MultiLineStringType, Vertices: points}
 	rv.init()
@@ -164,57 +183,64 @@ func (mls *MultiLineString) Marshal() ([]byte, error) {
 	return append([]byte{MultiLineStringTypePrefix}, b.Bytes()...), nil
 }
 
-func (p *MultiLineString) Intersects(other index.GeoJSON) (bool, error) {
-	p.init()
-	return checkLineStringsIntersectsShape(p.pls, p, other)
+func (mls *MultiLineString) Intersects(other index.GeoJSON) (bool, error) {
+	mls.init()
+	return checkLineStringsIntersectsShape(mls.pls, mls, other)
 }
 
-func (p *MultiLineString) Contains(other index.GeoJSON) (bool, error) {
-	p.init()
-	return checkLineStringsContainsShape(p.pls, other)
+func (mls *MultiLineString) Contains(other index.GeoJSON) (bool, error) {
+	mls.init()
+	return checkLineStringsContainsShape(mls.pls, other)
 }
 
-func (p *MultiLineString) Coordinates() [][][]float64 {
-	return p.Vertices
+func (mls *MultiLineString) Coordinates() [][][]float64 {
+	return mls.Vertices
 }
 
-func (p *MultiLineString) Members() []index.GeoJSON {
-	if len(p.Vertices) > 0 && len(p.pls) == 0 {
-		lines := make([]index.GeoJSON, len(p.Vertices))
-		for pos, vertices := range p.Vertices {
+func (mls *MultiLineString) Members() []index.GeoJSON {
+	if len(mls.Vertices) > 0 && len(mls.pls) == 0 {
+		lines := make([]index.GeoJSON, len(mls.Vertices))
+		for pos, vertices := range mls.Vertices {
 			lines[pos] = NewGeoJsonLinestring(vertices)
 		}
 		return lines
 	}
 
-	lines := make([]index.GeoJSON, len(p.pls))
-	for pos, pl := range p.pls {
+	lines := make([]index.GeoJSON, len(mls.pls))
+	for pos, pl := range mls.pls {
 		lines[pos] = &LineString{pl: pl}
 	}
 	return lines
 }
 
-// MultiLineStrings can only contain cross cells
-func (mls *MultiLineString) Cells() (inner, cross []uint64) {
-	ru := make(s2.RegionUnion, 0, len(mls.pls))
-	for _, pl := range mls.pls {
+// polylinesRegionUnion builds an s2.RegionUnion from the non-nil polylines.
+func polylinesRegionUnion(pls []*s2.Polyline) s2.RegionUnion {
+	ru := make(s2.RegionUnion, 0, len(pls))
+	for _, pl := range pls {
 		if pl != nil {
 			ru = append(ru, pl)
 		}
 	}
+	return ru
+}
+
+// IndexCells returns the multilinestring's covering, computed as a single
+// covering of the union of its polylines. Polylines have no area, so every
+// covering cell is a cross cell and inner is always nil.
+func (mls *MultiLineString) IndexCells() (inner, cross []uint64) {
+	mls.init()
+	ru := polylinesRegionUnion(mls.pls)
 	if len(ru) == 0 {
 		return nil, nil
 	}
 	return indexCellsFromRegion(ru)
 }
 
-func (mls *MultiLineString) QueryCells() (inner []uint64, cross []uint64) {
-	ru := make(s2.RegionUnion, 0, len(mls.pls))
-	for _, pl := range mls.pls {
-		if pl != nil {
-			ru = append(ru, pl)
-		}
-	}
+// QueryCells returns the multilinestring's query-time covering; like
+// IndexCells, it can only contain cross cells.
+func (mls *MultiLineString) QueryCells() (inner, cross []uint64) {
+	mls.init()
+	ru := polylinesRegionUnion(mls.pls)
 	if len(ru) == 0 {
 		return nil, nil
 	}
@@ -222,6 +248,7 @@ func (mls *MultiLineString) QueryCells() (inner []uint64, cross []uint64) {
 }
 
 func (mls *MultiLineString) BoundingBox() index.GeoJSON {
+	mls.init()
 	r := s2.EmptyRect()
 	for _, pl := range mls.pls {
 		if pl != nil {
@@ -229,6 +256,29 @@ func (mls *MultiLineString) BoundingBox() index.GeoJSON {
 		}
 	}
 	return envelopeFromRect(r)
+}
+
+func (mls *MultiLineString) IndexTokens(s *s2.RegionTermIndexer) []string {
+	mls.init()
+	var rv []string
+	for _, ls := range mls.pls {
+		terms := s.GetIndexTermsForRegion(ls.CapBound(), "")
+		rv = append(rv, terms...)
+	}
+
+	return StripCoveringTerms(rv)
+}
+
+func (mls *MultiLineString) QueryTokens(s *s2.RegionTermIndexer) []string {
+	mls.init()
+
+	var rv []string
+	for _, ls := range mls.pls {
+		terms := s.GetQueryTermsForRegion(ls.CapBound(), "")
+		rv = append(rv, terms...)
+	}
+
+	return StripCoveringTerms(rv)
 }
 
 // checkLineStringsIntersectsShape checks whether the given linestrings
@@ -301,7 +351,7 @@ func checkLineStringsIntersectsShape(pls []*s2.Polyline, shapeIn,
 
 	if gc, ok := other.(*GeometryCollection); ok {
 		// check whether the linestring intersects with any of the
-		// shapes Contains a geometrycollection.
+		// shapes within the geometrycollection.
 		if geometryCollectionIntersectsShape(gc, shapeIn) {
 			return true, nil
 		}
@@ -336,8 +386,9 @@ func checkLineStringsIntersectsShape(pls []*s2.Polyline, shapeIn,
 		"found in document", other.Type())
 }
 
-// checkLineStringsContainsShape checks the containment for
-// points and multipoints for the linestring vertices.
+// checkLineStringsContainsShape checks whether the given points or
+// multipoints lie on the linestrings (anywhere along their edges,
+// not just at the vertices).
 func checkLineStringsContainsShape(pls []*s2.Polyline,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.

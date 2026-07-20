@@ -39,27 +39,27 @@ func NewGeoJsonPolygon(points [][][]float64) index.GeoJSON {
 	return rv
 }
 
-func (p *Polygon) init() {
-	if p.s2pgn == nil {
-		p.s2pgn = s2PolygonFromCoordinates(p.Vertices)
+func (pg *Polygon) init() {
+	if pg.s2pgn == nil {
+		pg.s2pgn = s2PolygonFromCoordinates(pg.Vertices)
 	}
 }
 
-func (p *Polygon) Type() string {
-	return strings.ToLower(p.Typ)
+func (pg *Polygon) Type() string {
+	return strings.ToLower(pg.Typ)
 }
 
-func (p *Polygon) Value() ([]byte, error) {
-	return jsoniter.Marshal(p)
+func (pg *Polygon) Value() ([]byte, error) {
+	return jsoniter.Marshal(pg)
 }
 
-func (p *Polygon) Marshal() ([]byte, error) {
-	p.init()
+func (pg *Polygon) Marshal() ([]byte, error) {
+	pg.init()
 
 	var b bytes.Buffer
 	b.Grow(128)
 	w := bufio.NewWriter(&b)
-	err := p.s2pgn.Encode(w)
+	err := pg.s2pgn.Encode(w)
 	if err != nil {
 		return nil, err
 	}
@@ -68,32 +68,41 @@ func (p *Polygon) Marshal() ([]byte, error) {
 	return append([]byte{PolygonTypePrefix}, b.Bytes()...), nil
 }
 
-func (p *Polygon) Intersects(other index.GeoJSON) (bool, error) {
-	// make an s2polygon for reuse.
-	p.init()
+func (pg *Polygon) Intersects(other index.GeoJSON) (bool, error) {
+	// lazily build the s2polygon for reuse.
+	pg.init()
 
-	return checkPolygonIntersectsShape(p.s2pgn, p, other)
+	return checkPolygonIntersectsShape(pg.s2pgn, pg, other)
 }
 
-func (p *Polygon) Contains(other index.GeoJSON) (bool, error) {
-	// make an s2polygon for reuse.
-	p.init()
+func (pg *Polygon) Contains(other index.GeoJSON) (bool, error) {
+	// lazily build the s2polygon for reuse.
+	pg.init()
 
-	return checkMultiPolygonContainsShape([]*s2.Polygon{p.s2pgn}, p, other)
+	return checkMultiPolygonContainsShape([]*s2.Polygon{pg.s2pgn}, pg, other)
 }
 
-func (p *Polygon) Coordinates() [][][]float64 {
-	return p.Vertices
+func (pg *Polygon) Coordinates() [][][]float64 {
+	return pg.Vertices
 }
 
-func (pg *Polygon) Cells() (inner, cross []uint64) {
+// IndexCells returns the polygon's covering partitioned into inner cells
+// (fully contained in the polygon, excluding any holes) and cross cells
+// (overlapping the boundary). The hole exclusion relies on the s2 polygon
+// being built from oriented loops, so ContainsCell is false for cells
+// inside interior rings.
+func (pg *Polygon) IndexCells() (inner, cross []uint64) {
+	pg.init()
 	if pg.s2pgn == nil {
 		return nil, nil
 	}
 	return indexCellsFromRegion(pg.s2pgn)
 }
 
-func (pg *Polygon) QueryCells() ([]uint64, []uint64) {
+// QueryCells returns the polygon's query-time covering, partitioned the same
+// way as IndexCells.
+func (pg *Polygon) QueryCells() (inner, cross []uint64) {
+	pg.init()
 	if pg.s2pgn == nil {
 		return nil, nil
 	}
@@ -101,16 +110,31 @@ func (pg *Polygon) QueryCells() ([]uint64, []uint64) {
 }
 
 func (pg *Polygon) BoundingBox() index.GeoJSON {
+	pg.init()
 	if pg.s2pgn == nil {
-		return nil
+		return envelopeFromRect(s2.EmptyRect())
 	}
 	return envelopeFromRect(pg.s2pgn.RectBound())
+}
+
+func (pg *Polygon) IndexTokens(s *s2.RegionTermIndexer) []string {
+	pg.init()
+	terms := s.GetIndexTermsForRegion(
+		pg.s2pgn.CapBound(), "")
+	return StripCoveringTerms(terms)
+}
+
+func (pg *Polygon) QueryTokens(s *s2.RegionTermIndexer) []string {
+	pg.init()
+	terms := s.GetQueryTermsForRegion(
+		pg.s2pgn.CapBound(), "")
+	return StripCoveringTerms(terms)
 }
 
 // --------------------------------------------------------
 // MultiPolygon represents the geoJSON multipolygon type
 // and it implements the index.GeoJSON interface as well as the
-// compositeShap interface.
+// compositeShape interface.
 type MultiPolygon struct {
 	Typ      string          `json:"type"`
 	Vertices [][][][]float64 `json:"coordinates"`
@@ -123,39 +147,39 @@ func NewGeoJsonMultiPolygon(points [][][][]float64) index.GeoJSON {
 	return rv
 }
 
-func (p *MultiPolygon) init() {
-	if p.s2pgns == nil {
-		p.s2pgns = make([]*s2.Polygon, len(p.Vertices))
-		for i, vertices := range p.Vertices {
+func (mp *MultiPolygon) init() {
+	if mp.s2pgns == nil {
+		mp.s2pgns = make([]*s2.Polygon, len(mp.Vertices))
+		for i, vertices := range mp.Vertices {
 			pgn := s2PolygonFromCoordinates(vertices)
-			p.s2pgns[i] = pgn
+			mp.s2pgns[i] = pgn
 		}
 	}
 }
 
-func (p *MultiPolygon) Type() string {
-	return strings.ToLower(p.Typ)
+func (mp *MultiPolygon) Type() string {
+	return strings.ToLower(mp.Typ)
 }
 
-func (p *MultiPolygon) Value() ([]byte, error) {
-	return jsoniter.Marshal(p)
+func (mp *MultiPolygon) Value() ([]byte, error) {
+	return jsoniter.Marshal(mp)
 }
 
-func (p *MultiPolygon) Marshal() ([]byte, error) {
-	p.init()
+func (mp *MultiPolygon) Marshal() ([]byte, error) {
+	mp.init()
 
 	var b bytes.Buffer
 	b.Grow(512)
 	w := bufio.NewWriter(&b)
 
 	// first write the number of polygons.
-	count := int32(len(p.s2pgns))
+	count := int32(len(mp.s2pgns))
 	err := binary.Write(w, binary.BigEndian, count)
 	if err != nil {
 		return nil, err
 	}
 	// write the polygons.
-	for _, pgn := range p.s2pgns {
+	for _, pgn := range mp.s2pgns {
 		err := pgn.Encode(w)
 		if err != nil {
 			return nil, err
@@ -166,11 +190,11 @@ func (p *MultiPolygon) Marshal() ([]byte, error) {
 	return append([]byte{MultiPolygonTypePrefix}, b.Bytes()...), nil
 }
 
-func (p *MultiPolygon) Intersects(other index.GeoJSON) (bool, error) {
-	p.init()
+func (mp *MultiPolygon) Intersects(other index.GeoJSON) (bool, error) {
+	mp.init()
 
-	for _, pgn := range p.s2pgns {
-		rv, err := checkPolygonIntersectsShape(pgn, p, other)
+	for _, pgn := range mp.s2pgns {
+		rv, err := checkPolygonIntersectsShape(pgn, mp, other)
 		if rv && err == nil {
 			return true, nil
 		}
@@ -179,52 +203,60 @@ func (p *MultiPolygon) Intersects(other index.GeoJSON) (bool, error) {
 	return false, nil
 }
 
-func (p *MultiPolygon) Contains(other index.GeoJSON) (bool, error) {
-	p.init()
+func (mp *MultiPolygon) Contains(other index.GeoJSON) (bool, error) {
+	mp.init()
 
-	return checkMultiPolygonContainsShape(p.s2pgns, p, other)
+	return checkMultiPolygonContainsShape(mp.s2pgns, mp, other)
 }
 
-func (p *MultiPolygon) Coordinates() [][][][]float64 {
-	return p.Vertices
+func (mp *MultiPolygon) Coordinates() [][][][]float64 {
+	return mp.Vertices
 }
 
-func (p *MultiPolygon) Members() []index.GeoJSON {
-	if len(p.Vertices) > 0 && len(p.s2pgns) == 0 {
-		polygons := make([]index.GeoJSON, len(p.Vertices))
-		for pos, vertices := range p.Vertices {
+func (mp *MultiPolygon) Members() []index.GeoJSON {
+	if len(mp.Vertices) > 0 && len(mp.s2pgns) == 0 {
+		polygons := make([]index.GeoJSON, len(mp.Vertices))
+		for pos, vertices := range mp.Vertices {
 			polygons[pos] = NewGeoJsonPolygon(vertices)
 		}
 		return polygons
 	}
 
-	polygons := make([]index.GeoJSON, len(p.s2pgns))
-	for pos, pgn := range p.s2pgns {
+	polygons := make([]index.GeoJSON, len(mp.s2pgns))
+	for pos, pgn := range mp.s2pgns {
 		polygons[pos] = &Polygon{s2pgn: pgn}
 	}
 	return polygons
 }
 
-func (mp *MultiPolygon) Cells() (inner, cross []uint64) {
-	ru := make(s2.RegionUnion, 0, len(mp.s2pgns))
-	for _, pg := range mp.s2pgns {
+// polygonsRegionUnion builds an s2.RegionUnion from the non-nil polygons.
+func polygonsRegionUnion(pgns []*s2.Polygon) s2.RegionUnion {
+	ru := make(s2.RegionUnion, 0, len(pgns))
+	for _, pg := range pgns {
 		if pg != nil {
 			ru = append(ru, pg)
 		}
 	}
+	return ru
+}
+
+// IndexCells returns the multipolygon's covering, computed as a single
+// covering of the union of its polygons and partitioned into inner and
+// cross cells.
+func (mp *MultiPolygon) IndexCells() (inner, cross []uint64) {
+	mp.init()
+	ru := polygonsRegionUnion(mp.s2pgns)
 	if len(ru) == 0 {
 		return nil, nil
 	}
 	return indexCellsFromRegion(ru)
 }
 
-func (mp *MultiPolygon) QueryCells() ([]uint64, []uint64) {
-	ru := make(s2.RegionUnion, 0, len(mp.s2pgns))
-	for _, pg := range mp.s2pgns {
-		if pg != nil {
-			ru = append(ru, pg)
-		}
-	}
+// QueryCells returns the multipolygon's query-time covering, partitioned the
+// same way as IndexCells.
+func (mp *MultiPolygon) QueryCells() (inner, cross []uint64) {
+	mp.init()
+	ru := polygonsRegionUnion(mp.s2pgns)
 	if len(ru) == 0 {
 		return nil, nil
 	}
@@ -232,6 +264,7 @@ func (mp *MultiPolygon) QueryCells() ([]uint64, []uint64) {
 }
 
 func (mp *MultiPolygon) BoundingBox() index.GeoJSON {
+	mp.init()
 	r := s2.EmptyRect()
 	for _, pg := range mp.s2pgns {
 		if pg != nil {
@@ -239,6 +272,30 @@ func (mp *MultiPolygon) BoundingBox() index.GeoJSON {
 		}
 	}
 	return envelopeFromRect(r)
+}
+
+func (mp *MultiPolygon) IndexTokens(s *s2.RegionTermIndexer) []string {
+	mp.init()
+
+	var rv []string
+	for _, s2pgn := range mp.s2pgns {
+		terms := s.GetIndexTermsForRegion(s2pgn.CapBound(), "")
+		rv = append(rv, terms...)
+	}
+
+	return StripCoveringTerms(rv)
+}
+
+func (mp *MultiPolygon) QueryTokens(s *s2.RegionTermIndexer) []string {
+	mp.init()
+
+	var rv []string
+	for _, s2pgn := range mp.s2pgns {
+		terms := s.GetQueryTermsForRegion(s2pgn.CapBound(), "")
+		rv = append(rv, terms...)
+	}
+
+	return StripCoveringTerms(rv)
 }
 
 // checkPolygonIntersectsShape checks the intersection between the

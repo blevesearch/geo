@@ -112,14 +112,21 @@ func (c *Circle) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (c *Circle) Cells() (inner, cross []uint64) {
+// IndexCells returns the circle's covering partitioned into inner cells
+// (fully contained in the cap built from the center and radiusInMeters)
+// and cross cells (overlapping the cap's boundary).
+func (c *Circle) IndexCells() (inner, cross []uint64) {
+	c.init()
 	if c.s2cap == nil {
 		return nil, nil
 	}
 	return indexCellsFromRegion(*c.s2cap)
 }
 
-func (c *Circle) QueryCells() ([]uint64, []uint64) {
+// QueryCells returns the circle's query-time covering, partitioned the same
+// way as IndexCells.
+func (c *Circle) QueryCells() (inner, cross []uint64) {
+	c.init()
 	if c.s2cap == nil {
 		return nil, nil
 	}
@@ -127,10 +134,21 @@ func (c *Circle) QueryCells() ([]uint64, []uint64) {
 }
 
 func (c *Circle) BoundingBox() index.GeoJSON {
+	c.init()
 	if c.s2cap == nil {
-		return nil
+		return envelopeFromRect(s2.EmptyRect())
 	}
 	return envelopeFromRect(c.s2cap.RectBound())
+}
+
+func (c *Circle) IndexTokens(s *s2.RegionTermIndexer) []string {
+	c.init()
+	return StripCoveringTerms(s.GetIndexTermsForRegion(c.s2cap.CapBound(), ""))
+}
+
+func (c *Circle) QueryTokens(s *s2.RegionTermIndexer) []string {
+	c.init()
+	return StripCoveringTerms(s.GetQueryTermsForRegion(c.s2cap.CapBound(), ""))
 }
 
 // checkCircleIntersectsShape checks for intersection of the
@@ -203,7 +221,7 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 
 	if gc, ok := other.(*GeometryCollection); ok {
 		// check whether the circle intersects with any of the
-		// member shapes Contains the geometrycollection.
+		// member shapes within the geometrycollection.
 		if geometryCollectionIntersectsShape(gc, shapeIn) {
 			return true, nil
 		}

@@ -87,29 +87,47 @@ func (p *Point) Coordinates() []float64 {
 	return p.Vertices
 }
 
-// Point can only have a single cross cell
-func (p *Point) Cells() (inner, cross []uint64) {
+// IndexCells returns the point's covering: a point has no area, so it is a
+// single maxCellLevel cross cell and never an inner cell.
+func (p *Point) IndexCells() (inner, cross []uint64) {
+	p.init()
 	if p.s2point == nil {
 		return nil, nil
 	}
 	return nil, []uint64{pointCell(*p.s2point)}
 }
 
-func (p *Point) QueryCells() ([]uint64, []uint64) {
-	return p.Cells() // Point can only have a single cross cell
+// QueryCells delegates to IndexCells: a point maps to exactly one cell, so
+// the query-time coverer would produce the same single cross cell as the
+// index-time coverer.
+func (p *Point) QueryCells() (inner, cross []uint64) {
+	return p.IndexCells()
 }
 
 func (p *Point) BoundingBox() index.GeoJSON {
+	p.init()
 	if p.s2point == nil {
-		return nil
+		return envelopeFromRect(s2.EmptyRect())
 	}
 	return envelopeFromRect(p.s2point.RectBound())
+}
+
+func (p *Point) IndexTokens(s *s2.RegionTermIndexer) []string {
+	p.init()
+	terms := s.GetIndexTermsForPoint(*p.s2point, "")
+	return StripCoveringTerms(terms)
+}
+
+func (p *Point) QueryTokens(s *s2.RegionTermIndexer) []string {
+	p.init()
+	terms := s.GetQueryTermsForPoint(*p.s2point, "")
+	return StripCoveringTerms(terms)
 }
 
 // --------------------------------------------------------
 // MultiPoint represents the geoJSON multipoint type and it
 // implements the index.GeoJSON interface as well as the
-// compositeShap interface.
+// compositeShape interface.
 type MultiPoint struct {
 	Typ      string      `json:"type"`
 	Vertices [][]float64 `json:"coordinates"`
@@ -133,21 +151,21 @@ func (mp *MultiPoint) init() {
 	}
 }
 
-func (p *MultiPoint) Marshal() ([]byte, error) {
-	p.init()
+func (mp *MultiPoint) Marshal() ([]byte, error) {
+	mp.init()
 
 	var b bytes.Buffer
 	b.Grow(64)
 	w := bufio.NewWriter(&b)
 
 	// first write the number of points.
-	count := int32(len(p.s2points))
+	count := int32(len(mp.s2points))
 	err := binary.Write(w, binary.BigEndian, count)
 	if err != nil {
 		return nil, err
 	}
 	// write the points.
-	for _, s2point := range p.s2points {
+	for _, s2point := range mp.s2points {
 		err := s2point.Encode(w)
 		if err != nil {
 			return nil, err
@@ -158,19 +176,19 @@ func (p *MultiPoint) Marshal() ([]byte, error) {
 	return append([]byte{MultiPointTypePrefix}, b.Bytes()...), nil
 }
 
-func (p *MultiPoint) Type() string {
-	return strings.ToLower(p.Typ)
+func (mp *MultiPoint) Type() string {
+	return strings.ToLower(mp.Typ)
 }
 
 func (mp *MultiPoint) Value() ([]byte, error) {
 	return jsoniter.Marshal(mp)
 }
 
-func (p *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {
-	p.init()
+func (mp *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {
+	mp.init()
 
-	for _, s2point := range p.s2points {
-		rv, err := checkPointIntersectsShape(s2point, p, other)
+	for _, s2point := range mp.s2points {
+		rv, err := checkPointIntersectsShape(s2point, mp, other)
 		if rv && err == nil {
 			return rv, nil
 		}
@@ -179,10 +197,10 @@ func (p *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {
 	return false, nil
 }
 
-func (p *MultiPoint) Contains(other index.GeoJSON) (bool, error) {
-	p.init()
+func (mp *MultiPoint) Contains(other index.GeoJSON) (bool, error) {
+	mp.init()
 
-	rv, err := checkPointContainsShape(p.s2points, other)
+	rv, err := checkPointContainsShape(mp.s2points, other)
 	if rv && err == nil {
 		return rv, nil
 	}
@@ -190,43 +208,56 @@ func (p *MultiPoint) Contains(other index.GeoJSON) (bool, error) {
 	return false, nil
 }
 
-func (p *MultiPoint) Coordinates() [][]float64 {
-	return p.Vertices
+func (mp *MultiPoint) Coordinates() [][]float64 {
+	return mp.Vertices
 }
 
-func (p *MultiPoint) Members() []index.GeoJSON {
-	if len(p.Vertices) > 0 && len(p.s2points) == 0 {
-		points := make([]index.GeoJSON, len(p.Vertices))
-		for pos, vertices := range p.Vertices {
+func (mp *MultiPoint) Members() []index.GeoJSON {
+	if len(mp.Vertices) > 0 && len(mp.s2points) == 0 {
+		points := make([]index.GeoJSON, len(mp.Vertices))
+		for pos, vertices := range mp.Vertices {
 			points[pos] = NewGeoJsonPoint(vertices)
 		}
 		return points
 	}
 
-	points := make([]index.GeoJSON, len(p.s2points))
-	for pos, point := range p.s2points {
+	points := make([]index.GeoJSON, len(mp.s2points))
+	for pos, point := range mp.s2points {
 		points[pos] = &Point{s2point: point}
 	}
 	return points
 }
 
-// MultiPoints can only have cross cells
-func (mp *MultiPoint) Cells() (inner, cross []uint64) {
+// IndexCells returns the multipoint's covering: points have no area, so the
+// result is one maxCellLevel cross cell per distinct point cell and never any
+// inner cells. Cells are deduplicated, since points can share a cell.
+func (mp *MultiPoint) IndexCells() (inner, cross []uint64) {
+	mp.init()
+	seen := make(map[uint64]struct{}, len(mp.s2points))
 	cross = make([]uint64, 0, len(mp.s2points))
 	for _, pt := range mp.s2points {
 		if pt == nil {
 			continue
 		}
-		cross = append(cross, pointCell(*pt))
+		cell := pointCell(*pt)
+		if _, ok := seen[cell]; ok {
+			continue
+		}
+		seen[cell] = struct{}{}
+		cross = append(cross, cell)
 	}
 	return nil, cross
 }
 
-func (mp *MultiPoint) QueryCells() ([]uint64, []uint64) {
-	return mp.Cells() // MultiPoint can only have cross cells
+// QueryCells delegates to IndexCells: each point maps to exactly one cell, so
+// the query-time coverer would produce the same cross cells as the index-time
+// coverer.
+func (mp *MultiPoint) QueryCells() (inner, cross []uint64) {
+	return mp.IndexCells()
 }
 
 func (mp *MultiPoint) BoundingBox() index.GeoJSON {
+	mp.init()
 	r := s2.EmptyRect()
 	for _, pt := range mp.s2points {
 		if pt == nil {
@@ -235,6 +266,27 @@ func (mp *MultiPoint) BoundingBox() index.GeoJSON {
 		r = r.Union(pt.RectBound())
 	}
 	return envelopeFromRect(r)
+}
+
+func (mp *MultiPoint) IndexTokens(s *s2.RegionTermIndexer) []string {
+	mp.init()
+	var rv []string
+	for _, s2point := range mp.s2points {
+		terms := s.GetIndexTermsForPoint(*s2point, "")
+		rv = append(rv, terms...)
+	}
+	return StripCoveringTerms(rv)
+}
+
+func (mp *MultiPoint) QueryTokens(s *s2.RegionTermIndexer) []string {
+	mp.init()
+	var rv []string
+	for _, s2point := range mp.s2points {
+		terms := s.GetQueryTermsForPoint(*s2point, "")
+		rv = append(rv, terms...)
+	}
+
+	return StripCoveringTerms(rv)
 }
 
 // checkPointIntersectsShape checks for intersection between

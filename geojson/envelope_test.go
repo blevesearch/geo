@@ -121,7 +121,7 @@ func TestEnvelopeIntersects(t *testing.T) {
 			other:  NewGeoEnvelope([][]float64{{0, 2}, {2, 0}}),
 			output: true,
 		},
-		{ //  - Envelope with no intersection
+		{ // 19 - Envelope with no intersection
 			query:  &Envelope{Typ: EnvelopeType, Vertices: [][]float64{{2, 1}, {1, 2}}},
 			other:  NewGeoEnvelope([][]float64{{4, 6}, {6, 4}}),
 			output: false,
@@ -247,5 +247,48 @@ func TestEnvelopeContains(t *testing.T) {
 		if result != test.output {
 			t.Errorf("Test - %d, expected %v, got %v", i, test.output, result)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// geo shape v2 cell tests
+
+func TestEnvelopeCells(t *testing.T) {
+	// envelope vertices are [[minLng, maxLat], [maxLng, minLat]]
+	e := NewGeoEnvelope([][]float64{{0, 20}, {20, 0}}).(*Envelope)
+
+	inner, cross := e.IndexCells()
+	if len(inner) == 0 {
+		t.Fatal("expected inner cells for a large envelope, got none")
+	}
+	if len(cross) == 0 {
+		t.Fatal("expected cross cells along the envelope boundary, got none")
+	}
+	verifyCellPartition(t, *e.r, inner, cross)
+
+	if !cellsCoverLatLng(append(inner, cross...), 10, 10) {
+		t.Fatal("covering does not cover the envelope's center")
+	}
+
+	qInner, qCross := e.QueryCells()
+	verifyCellPartition(t, *e.r, qInner, qCross)
+	if len(qInner)+len(qCross) < len(inner)+len(cross) {
+		t.Fatalf("expected the query covering (%d cells) to be at least as "+
+			"fine as the index covering (%d cells)",
+			len(qInner)+len(qCross), len(inner)+len(cross))
+	}
+}
+
+func TestEnvelopeBoundingBox(t *testing.T) {
+	e := NewGeoEnvelope([][]float64{{0, 20}, {20, 0}}).(*Envelope)
+
+	// an envelope's bounding box is an equivalent envelope
+	env, ok := e.BoundingBox().(*Envelope)
+	if !ok || env.r == nil {
+		t.Fatalf("expected an envelope bounding box, got %v", e.BoundingBox())
+	}
+	if !rectsApproxEqual(*env.r, *e.r) {
+		t.Fatalf("expected bounding box rect %v to equal the envelope's own "+
+			"rect %v", env.r, e.r)
 	}
 }

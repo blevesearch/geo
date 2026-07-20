@@ -24,7 +24,7 @@ import (
 	"github.com/blevesearch/geo/s2"
 )
 
-// Envelope represents the  envelope/bounding box type and it
+// Envelope represents the envelope/bounding box type and it
 // implements the index.GeoJSON interface.
 type Envelope struct {
 	Typ      string      `json:"type"`
@@ -80,14 +80,21 @@ func (e *Envelope) Contains(other index.GeoJSON) (bool, error) {
 	return checkEnvelopeContainsShape(e.r, e, other)
 }
 
-func (e *Envelope) Cells() (inner, cross []uint64) {
+// IndexCells returns the envelope's covering partitioned into inner cells
+// (fully contained in the rectangle) and cross cells (overlapping its
+// boundary).
+func (e *Envelope) IndexCells() (inner, cross []uint64) {
+	e.init()
 	if e.r == nil {
 		return nil, nil
 	}
 	return indexCellsFromRegion(*e.r)
 }
 
-func (e *Envelope) QueryCells() ([]uint64, []uint64) {
+// QueryCells returns the envelope's query-time covering, partitioned the
+// same way as IndexCells.
+func (e *Envelope) QueryCells() (inner, cross []uint64) {
+	e.init()
 	if e.r == nil {
 		return nil, nil
 	}
@@ -95,14 +102,25 @@ func (e *Envelope) QueryCells() ([]uint64, []uint64) {
 }
 
 func (e *Envelope) BoundingBox() index.GeoJSON {
+	e.init()
 	if e.r == nil {
-		return nil
+		return envelopeFromRect(s2.EmptyRect())
 	}
-	return envelopeFromRect(*e.r) // an envelope's bbox is itself
+	return e
+}
+
+func (e *Envelope) IndexTokens(s *s2.RegionTermIndexer) []string {
+	e.init()
+	return StripCoveringTerms(s.GetIndexTermsForRegion(e.r.CapBound(), ""))
+}
+
+func (e *Envelope) QueryTokens(s *s2.RegionTermIndexer) []string {
+	e.init()
+	return StripCoveringTerms(s.GetQueryTermsForRegion(e.r.CapBound(), ""))
 }
 
 // checkEnvelopeIntersectsShape checks whether the given shape in
-// the document is intersecting Contains the envelope/rectangle.
+// the document is intersecting with the envelope/rectangle.
 func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.
@@ -200,7 +218,7 @@ func checkEnvelopeIntersectsShape(s2rect *s2.Rect, shapeIn,
 }
 
 // checkEnvelopeContainsShape checks whether the given shape in
-// the document is contained Contains the envelope/rectangle.
+// the document is contained within the envelope/rectangle.
 func checkEnvelopeContainsShape(s2rect *s2.Rect, shapeIn,
 	other index.GeoJSON) (bool, error) {
 	// check if the other shape is a point.

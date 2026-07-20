@@ -27,7 +27,7 @@ import (
 
 // GeometryCollection represents the geoJSON geometryCollection type
 // and it implements the index.GeoJSON interface as well as the
-// compositeShap interface.
+// compositeShape interface.
 type GeometryCollection struct {
 	Typ    string          `json:"type"`
 	Shapes []index.GeoJSON `json:"geometries"`
@@ -127,28 +127,58 @@ func (gc *GeometryCollection) Contains(other index.GeoJSON) (bool, error) {
 	return false, nil
 }
 
-func (gc *GeometryCollection) Cells() (inner, cross []uint64) {
+// aggregateCells merges the member shapes' inner/cross cell coverings into a
+// single deduplicated pair. A cell reported as inner by any member is fully
+// contained in the union of the members, so it stays inner even when another
+// member reports the same cell as a cross cell. The results are in no
+// particular order.
+func (gc *GeometryCollection) aggregateCells(
+	cells func(index.GeoJSON) (inner, cross []uint64)) (inner, cross []uint64) {
+	innerSet := make(map[uint64]struct{})
+	crossSet := make(map[uint64]struct{})
 	for _, s := range gc.Shapes {
 		if s == nil {
 			continue
 		}
-		in, cr := s.Cells()
-		inner = append(inner, in...)
-		cross = append(cross, cr...)
+		in, cr := cells(s)
+		for _, cell := range in {
+			innerSet[cell] = struct{}{}
+		}
+		for _, cell := range cr {
+			crossSet[cell] = struct{}{}
+		}
+	}
+
+	inner = make([]uint64, 0, len(innerSet))
+	for cell := range innerSet {
+		inner = append(inner, cell)
+	}
+	cross = make([]uint64, 0, len(crossSet))
+	for cell := range crossSet {
+		// inner wins: the cell is fully contained in some member,
+		// hence in the collection as a whole
+		if _, ok := innerSet[cell]; ok {
+			continue
+		}
+		cross = append(cross, cell)
 	}
 	return inner, cross
 }
 
-func (gc *GeometryCollection) QueryCells() (inner []uint64, cross []uint64) {
-	for _, s := range gc.Shapes {
-		if s == nil {
-			continue
-		}
-		in, cr := s.QueryCells()
-		inner = append(inner, in...)
-		cross = append(cross, cr...)
-	}
-	return inner, cross
+// IndexCells returns the union of the member shapes' coverings, deduplicated
+// and reconciled (see aggregateCells).
+func (gc *GeometryCollection) IndexCells() (inner, cross []uint64) {
+	return gc.aggregateCells(func(s index.GeoJSON) ([]uint64, []uint64) {
+		return s.IndexCells()
+	})
+}
+
+// QueryCells returns the union of the member shapes' query-time coverings,
+// deduplicated and reconciled (see aggregateCells).
+func (gc *GeometryCollection) QueryCells() (inner, cross []uint64) {
+	return gc.aggregateCells(func(s index.GeoJSON) ([]uint64, []uint64) {
+		return s.QueryCells()
+	})
 }
 
 func (gc *GeometryCollection) BoundingBox() index.GeoJSON {
@@ -157,14 +187,27 @@ func (gc *GeometryCollection) BoundingBox() index.GeoJSON {
 		if s == nil {
 			continue
 		}
-		// Reads the rect out of each child's bounding box. The concrete type
-		// here must match whatever <child>.BoundingBox() actually returns;
-		// adjust the assertion if your envelope lives in another package.
+		// every shape in this package returns its bounding box as an
+		// *Envelope; members with an empty bounding box contribute an
+		// empty rect, which Union ignores
 		if env, ok := s.BoundingBox().(*Envelope); ok && env != nil && env.r != nil {
 			r = r.Union(*env.r)
 		}
 	}
 	return envelopeFromRect(r)
+}
+
+// geometryCollectionIntersectsShape checks whether any member shape of the
+// geometrycollection intersects with the given shape.
+func geometryCollectionIntersectsShape(gc *GeometryCollection,
+	shapeIn index.GeoJSON) bool {
+	for _, shape := range gc.Members() {
+		intersects, err := shapeIn.Intersects(shape)
+		if err == nil && intersects {
+			return true
+		}
+	}
+	return false
 }
 
 func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
