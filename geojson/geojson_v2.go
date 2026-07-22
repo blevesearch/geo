@@ -16,9 +16,7 @@ package geojson
 
 import "github.com/blevesearch/geo/s2"
 
-// Region coverer configuration for the geo shape v2 index. These are
-// compile-time constants: the two coverers below capture them at package
-// init, so runtime mutation would have no effect.
+// Region coverer configuration for the geo shape v2 index.
 const (
 	minCellLevel  = 6
 	maxCellLevel  = 14
@@ -47,7 +45,6 @@ func pointCell(p s2.Point) uint64 {
 }
 
 // envelopeFromRect builds an Envelope GeoJSON from an s2.Rect.
-// GeoJSON envelope coordinates are [[minLng, maxLat], [maxLng, minLat]].
 func envelopeFromRect(r s2.Rect) *Envelope {
 	lo := r.Lo() // (minLat, minLng)
 	hi := r.Hi() // (maxLat, maxLng)
@@ -69,7 +66,7 @@ func envelopeFromRect(r s2.Rect) *Envelope {
 // Because the partition comes from one covering, the two sets are disjoint and
 // exhaustive over the region. For regions without area (Point, Polyline,
 // RegionUnion of those) ContainsCell is always false, so every cell is a cross
-// cell and inner is nil — exactly what the index expects for arealess shapes.
+// cell and inner is nil.
 func cellsFromRegion(region s2.Region, coverer *s2.RegionCoverer) (inner, cross []uint64) {
 	covering := coverer.Covering(region)
 	inner = make([]uint64, 0, len(covering))
