@@ -18,8 +18,8 @@ import "github.com/blevesearch/geo/s2"
 
 // Region coverer configuration for the geo shape v2 index.
 const (
-	minCellLevel  = 6
-	maxCellLevel  = 14
+	minCellLevel  = 0
+	maxCellLevel  = 16
 	cellLevelMod  = 1
 	maxIndexCells = 200
 	maxQueryCells = 1000
