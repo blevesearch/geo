@@ -1,5 +1,5 @@
-github.com/blevesearch/bleve_index_api v1.3.1 h1:LdH3CQgBbIZ5UI/5Pykz87e0jfeQtVnrdZ2WUBrHHwU=
-github.com/blevesearch/bleve_index_api v1.3.1/go.mod h1:xvd48t5XMeeioWQ5/jZvgLrV98flT2rdvEJ3l/ki4Ko=
+github.com/blevesearch/bleve_index_api v1.4.1-0.20260729060817-8e56340f2a7e h1:WJ3JnFiBuZ0m1mXaniDHpbZxKU8hjp7SIhqHopSnaM4=
+github.com/blevesearch/bleve_index_api v1.4.1-0.20260729060817-8e56340f2a7e/go.mod h1:xvd48t5XMeeioWQ5/jZvgLrV98flT2rdvEJ3l/ki4Ko=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
