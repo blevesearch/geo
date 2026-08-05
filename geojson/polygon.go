@@ -496,6 +496,23 @@ func checkMultiPolygonContainsShape(s2pgns []*s2.Polygon,
 		radius := c.s2cap.Radius()
 
 		for _, s2pgn := range s2pgns {
+			if s2pgn == nil {
+				continue
+			}
+
+			// The full polygon covers the sphere, so it contains every circle,
+			// but it carries no boundary edges to measure the radius against.
+			if s2pgn.IsFull() {
+				return true, nil
+			}
+
+			// Any other polygon without boundary edges is degenerate: it
+			// encloses no area, so it cannot contain a circle, and there is no
+			// boundary to project the centre onto.
+			if s2pgn.NumEdges() == 0 {
+				continue
+			}
+
 			if s2pgn.ContainsPoint(cp) {
 				projected := s2pgn.ProjectToBoundary(&cp)
 				distance := projected.Distance(cp)

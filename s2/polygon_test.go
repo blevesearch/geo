@@ -15,6 +15,7 @@
 package s2
 
 import (
+	"bytes"
 	"math"
 	"math/rand"
 	"testing"
@@ -1176,6 +1177,47 @@ func TestPolygonProject(t *testing.T) {
 	expected = PointFromLatLng(LatLngFromDegrees(0, -2))
 	if !projected.ApproxEqual(expected) {
 		t.Errorf("projection %v failed for %v", projected, expected)
+	}
+}
+
+// TestPolygonProjectToBoundaryDegenerate covers polygons that have no boundary
+// to project onto.
+func TestPolygonProjectToBoundaryDegenerate(t *testing.T) {
+	point := PointFromLatLng(LatLngFromDegrees(0, 0))
+
+	var decodedFull Polygon
+	var buf bytes.Buffer
+	if err := FullPolygon().Encode(&buf); err != nil {
+		t.Fatalf("encoding the full polygon: %v", err)
+	}
+	if err := decodedFull.Decode(bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("decoding the full polygon: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		polygon *Polygon
+	}{
+		{"empty polygon", &Polygon{}},
+		{"full polygon", FullPolygon()},
+		{"decoded full polygon", &decodedFull},
+		{"single vertex loop", PolygonFromLoops([]*Loop{LoopFromPoints([]Point{point})})},
+	}
+
+	for _, test := range tests {
+		// The full polygon has no ShapeIndex at all, so ContainsPoint must not
+		// reach for one either.
+		if got, want := test.polygon.ContainsPoint(point), test.polygon.IsFull(); got != want {
+			t.Errorf("%s: ContainsPoint(%v) = %v, want %v", test.name, point, got, want)
+		}
+
+		// With no boundary, the point projects onto itself, which reports a
+		// distance to the boundary of zero.
+		projected := test.polygon.ProjectToBoundary(&point)
+		if !projected.ApproxEqual(point) {
+			t.Errorf("%s: ProjectToBoundary(%v) = %v, want %v",
+				test.name, point, projected, point)
+		}
 	}
 }
 
