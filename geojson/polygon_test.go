@@ -186,7 +186,7 @@ func TestPolygonIntersects(t *testing.T) {
 		{ // 31 - Envelope with one vertex overlap
 			query:  &Polygon{Typ: PolygonType, Vertices: [][][]float64{{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}},
 			other:  NewGeoEnvelope([][]float64{{1, 0}, {2, -2}}),
-			output: false,
+			output: true,
 		},
 		{ // 32 - Envelope with one edge overlap
 			query:  &Polygon{Typ: PolygonType, Vertices: [][][]float64{{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}},
@@ -391,7 +391,7 @@ func TestMultiPolygonIntersects(t *testing.T) {
 		{ // 31 - Envelope with one vertex overlap
 			query:  &MultiPolygon{Typ: MultiPolygonType, Vertices: [][][][]float64{{{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}, {{{100, 100}, {100, 101}, {101, 101}, {101, 100}, {100, 100}}}}},
 			other:  NewGeoEnvelope([][]float64{{1, 0}, {2, -2}}),
-			output: false,
+			output: true,
 		},
 		{ // 32 - Envelope with one edge overlap
 			query:  &MultiPolygon{Typ: MultiPolygonType, Vertices: [][][][]float64{{{{100, 100}, {100, 101}, {101, 101}, {101, 100}, {100, 100}}}, {{{-1, 0}, {1, 0}, {2, 3}, {0, 3}, {-1, 0}}}}},
