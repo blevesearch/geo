@@ -146,29 +146,24 @@ func (d *decoder) buffer() []byte {
 	return d.buf
 }
 
-func (d *decoder) readBool() (x bool) {
-	if d.err != nil {
-		return
-	}
-	var val int8
-	d.err = binary.Read(d.r, binary.LittleEndian, &val)
-	return val == 1
+// The fixed-width reads below go through the decoder's own scratch buffer rather
+// than binary.Read. binary.Read takes its destination as an interface, which
+// puts the destination on the heap on every call, and these are called once per
+// loop and several times per shape. Reading the bytes and assembling the value
+// by hand costs nothing and allocates nothing. The error behaviour is the same:
+// io.ReadFull reports io.EOF when no byte could be read and
+// io.ErrUnexpectedEOF on a short read, which is what binary.Read reported.
+
+func (d *decoder) readBool() bool {
+	return d.readUint8() == 1
 }
 
-func (d *decoder) readInt8() (x int8) {
-	if d.err != nil {
-		return
-	}
-	d.err = binary.Read(d.r, binary.LittleEndian, &x)
-	return
+func (d *decoder) readInt8() int8 {
+	return int8(d.readUint8())
 }
 
-func (d *decoder) readInt64() (x int64) {
-	if d.err != nil {
-		return
-	}
-	d.err = binary.Read(d.r, binary.LittleEndian, &x)
-	return
+func (d *decoder) readInt64() int64 {
+	return int64(d.readUint64())
 }
 
 func (d *decoder) readUint8() (x uint8) {
@@ -183,16 +178,22 @@ func (d *decoder) readUint32() (x uint32) {
 	if d.err != nil {
 		return
 	}
-	d.err = binary.Read(d.r, binary.LittleEndian, &x)
-	return
+	buf := d.buffer()[:4]
+	if _, d.err = io.ReadFull(d.r, buf); d.err != nil {
+		return
+	}
+	return binary.LittleEndian.Uint32(buf)
 }
 
 func (d *decoder) readUint64() (x uint64) {
 	if d.err != nil {
 		return
 	}
-	d.err = binary.Read(d.r, binary.LittleEndian, &x)
-	return
+	buf := d.buffer()[:8]
+	if _, d.err = io.ReadFull(d.r, buf); d.err != nil {
+		return
+	}
+	return binary.LittleEndian.Uint64(buf)
 }
 
 func (d *decoder) readFloat64() float64 {

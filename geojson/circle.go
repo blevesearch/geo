@@ -179,19 +179,17 @@ func checkCircleIntersectsShape(s2cap *s2.Cap, shapeIn,
 	// check if the other shape is a polygon.
 	if p2, ok := other.(*Polygon); ok {
 		centerPoint := s2cap.Center()
-		projected := p2.s2pgn.Project(&centerPoint)
-		distance := projected.Distance(centerPoint)
-		return distance <= s2cap.Radius(), nil
+		return distanceFromPointToPolygon(centerPoint,
+			p2.s2pgn) <= s2cap.Radius(), nil
 	}
 
 	// check if the other shape is a multipolygon.
 	if p2, ok := other.(*MultiPolygon); ok {
 		// check the intersection for any polygon in the collection.
+		centerPoint := s2cap.Center()
 		for _, s2pgn := range p2.s2pgns {
-			centerPoint := s2cap.Center()
-			projected := s2pgn.Project(&centerPoint)
-			distance := projected.Distance(centerPoint)
-			if distance <= s2cap.Radius() {
+			if distanceFromPointToPolygon(centerPoint,
+				s2pgn) <= s2cap.Radius() {
 				return true, nil
 			}
 		}

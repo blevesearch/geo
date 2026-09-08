@@ -602,9 +602,36 @@ func (l *Loop) bruteForceContainsPoint(p Point) bool {
 	return inside
 }
 
+// shapeIndex returns the loop's ShapeIndex, creating it if the loop was decoded
+// rather than constructed. Decoding leaves the index unbuilt: a loop decoded as
+// part of a polygon is never queried through its own index, since the polygon
+// builds one covering all of its loops, and a loop decoded on its own is
+// usually measured once and thrown away.
+//
+// A loop that reaches here has been decoded, and a decoded loop belongs to the
+// goroutine that decoded it, so no synchronization is needed. Loops that are
+// constructed, which are the ones that get shared, have their index built by
+// initOriginAndBound before any sharing can happen.
+func (l *Loop) shapeIndex() *ShapeIndex {
+	if l.index == nil {
+		l.index = NewShapeIndex()
+		l.index.Add(l)
+	}
+
+	return l.index
+}
+
+// indexIsFresh reports whether the loop has an index with no updates left to
+// apply. An index that has not been created yet is not fresh: like an index with
+// pending updates, it still has work outstanding that a caller may be able to
+// avoid.
+func (l *Loop) indexIsFresh() bool {
+	return l.index != nil && l.index.IsFresh()
+}
+
 // ContainsPoint returns true if the loop contains the point.
 func (l *Loop) ContainsPoint(p Point) bool {
-	if !l.index.IsFresh() && !l.bound.ContainsPoint(p) {
+	if !l.indexIsFresh() && !l.bound.ContainsPoint(p) {
 		return false
 	}
 
@@ -620,13 +647,13 @@ func (l *Loop) ContainsPoint(p Point) bool {
 	const maxBruteForceVertices = 32
 	// TODO(roberts): add unindexed contains calls tracking
 
-	if len(l.index.shapes) == 0 || // Index has not been initialized yet.
+	if (l.index != nil && len(l.index.shapes) == 0) || // Index has not been initialized yet.
 		len(l.vertices) <= maxBruteForceVertices {
 		return l.bruteForceContainsPoint(p)
 	}
 
 	// Otherwise, look up the point in the index.
-	it := l.index.Iterator()
+	it := l.shapeIndex().Iterator()
 	if !it.LocatePoint(p) {
 		return false
 	}
@@ -635,7 +662,7 @@ func (l *Loop) ContainsPoint(p Point) bool {
 
 // ContainsCell reports whether the given Cell is contained by this Loop.
 func (l *Loop) ContainsCell(target Cell) bool {
-	it := l.index.Iterator()
+	it := l.shapeIndex().Iterator()
 	relation := it.LocateCellID(target.ID())
 
 	// If "target" is disjoint from all index cells, it is not contained.
@@ -659,7 +686,7 @@ func (l *Loop) ContainsCell(target Cell) bool {
 
 // IntersectsCell reports whether this Loop intersects the given cell.
 func (l *Loop) IntersectsCell(target Cell) bool {
-	it := l.index.Iterator()
+	it := l.shapeIndex().Iterator()
 	relation := it.LocateCellID(target.ID())
 
 	// If target does not overlap any index cell, there is no intersection.
@@ -890,7 +917,7 @@ func (l *Loop) Normalize() {
 // Notice that the last edge is the same in both cases except that its
 // direction has been reversed.
 func (l *Loop) Invert() {
-	l.index.Reset()
+	l.shapeIndex().Reset()
 	if l.isEmptyOrFull() {
 		if l.IsFull() {
 			l.vertices[0] = emptyLoopPoint
@@ -931,7 +958,7 @@ func (l *Loop) findVertex(p Point) (index int, ok bool) {
 		return notFound, false
 	}
 
-	it := l.index.Iterator()
+	it := l.shapeIndex().Iterator()
 	if !it.LocatePoint(p) {
 		return notFound, false
 	}
@@ -1337,16 +1364,13 @@ func (l *Loop) decode(d *decoder) {
 				binary.LittleEndian.Uint64(arr[sizeOfFloat64*(j*3+2) : sizeOfFloat64*(j*3+3)]))
 		}
 
-		i += int(numBytesRead/sizeOfVertex)
+		i += int(numBytesRead / sizeOfVertex)
 	}
 
-	l.index = NewShapeIndex()
 	l.originInside = d.readBool()
 	l.depth = int(d.readUint32())
 	l.bound.decode(d)
 	l.subregionBound = ExpandForSubregions(l.bound)
-
-	l.index.Add(l)
 }
 
 // Bitmasks to read from properties.
@@ -1424,7 +1448,6 @@ func (l *Loop) decodeCompressed(d *decoder, snapLevel int) {
 		return
 	}
 
-	l.index = NewShapeIndex()
 	l.originInside = (properties & originInside) != 0
 
 	l.depth = int(d.readUvarint())
@@ -1438,8 +1461,6 @@ func (l *Loop) decodeCompressed(d *decoder, snapLevel int) {
 	} else {
 		l.initBound()
 	}
-
-	l.index.Add(l)
 }
 
 // crossingTarget is an enum representing the possible crossing target cases for relations.
@@ -1520,7 +1541,7 @@ func newLoopCrosser(a, b *Loop, relation loopRelation, swapped bool) *loopCrosse
 		swapped:         swapped,
 		aCrossingTarget: relation.aCrossingTarget(),
 		bCrossingTarget: relation.bCrossingTarget(),
-		bQuery:          NewCrossingEdgeQuery(b.index),
+		bQuery:          NewCrossingEdgeQuery(b.shapeIndex()),
 	}
 	if swapped {
 		l.aCrossingTarget, l.bCrossingTarget = l.bCrossingTarget, l.aCrossingTarget
@@ -1715,8 +1736,8 @@ func (l *loopCrosser) hasCrossingRelation(ai, bi *rangeIterator) bool {
 func hasCrossingRelation(a, b *Loop, relation loopRelation) bool {
 	// We look for CellID ranges where the indexes of A and B overlap, and
 	// then test those edges for crossings.
-	ai := newRangeIterator(a.index)
-	bi := newRangeIterator(b.index)
+	ai := newRangeIterator(a.shapeIndex())
+	bi := newRangeIterator(b.shapeIndex())
 
 	ab := newLoopCrosser(a, b, relation, false) // Tests edges of A against B
 	ba := newLoopCrosser(b, a, relation, true)  // Tests edges of B against A

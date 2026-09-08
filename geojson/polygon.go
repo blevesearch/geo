@@ -377,10 +377,7 @@ func checkPolygonIntersectsShape(s2pgn *s2.Polygon, shapeIn,
 		cp := c.s2cap.Center()
 		radius := c.s2cap.Radius()
 
-		projected := s2pgn.Project(&cp)
-		distance := projected.Distance(cp)
-
-		return distance <= radius, nil
+		return distanceFromPointToPolygon(cp, s2pgn) <= radius, nil
 	}
 
 	// check if the other shape is a envelope.
@@ -412,13 +409,8 @@ func checkMultiPolygonContainsShape(s2pgns []*s2.Polygon,
 	// check if the other shape is a multipoint.
 	if p2, ok := other.(*MultiPoint); ok {
 		// check the containment for every point in the collection.
-		idx := s2.NewShapeIndex()
-		for _, s2pgn := range s2pgns {
-			idx.Add(s2pgn)
-		}
-
 		for _, point := range p2.s2points {
-			if !s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point) {
+			if !polygonsIntersectsPoint(s2pgns, point) {
 				return false, nil
 			}
 		}
@@ -513,12 +505,9 @@ func checkMultiPolygonContainsShape(s2pgns []*s2.Polygon,
 				continue
 			}
 
-			if s2pgn.ContainsPoint(cp) {
-				projected := s2pgn.ProjectToBoundary(&cp)
-				distance := projected.Distance(cp)
-				if distance >= radius {
-					return true, nil
-				}
+			if s2pgn.ContainsPointClosed(cp) &&
+				distanceFromPointToPolygonBoundary(cp, s2pgn) >= radius {
+				return true, nil
 			}
 		}
 

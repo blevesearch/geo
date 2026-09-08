@@ -44,30 +44,9 @@ func polylineIntersectsPoint(pls []*s2.Polyline,
 // the polygons
 func polylineIntersectsPolygons(pls []*s2.Polyline,
 	s2pgns []*s2.Polygon) bool {
-	idx := s2.NewShapeIndex()
-	for _, pgn := range s2pgns {
-		idx.Add(pgn)
-	}
-
-	containsQuery := s2.NewContainsPointQuery(idx, s2.VertexModelClosed)
 	for _, pl := range pls {
 		for _, point := range *pl {
-
-			// Precheck points within the bounds of the polygon
-			// and for small polygons, check if the point is contained
-			for _, s2pgn := range s2pgns {
-				if !s2pgn.PointWithinBound(point) {
-					continue
-				}
-
-				if small, inside := s2pgn.SmallPolygonContainsPoint(point); small {
-					if inside {
-						return true
-					}
-				}
-			}
-
-			if containsQuery.Contains(point) {
+			if polygonsIntersectsPoint(s2pgns, &point) {
 				return true
 			}
 		}
@@ -91,41 +70,47 @@ func polylineIntersectsPolygons(pls []*s2.Polyline,
 	return false
 }
 
-// check if the point is contained within the polygon.
-// polygon contains point will consider vertices to be outside
-// so we create a shape index and query it instead
-// s2.VertexModelClosed will not consider points on the edges, so
-// behaviour there is arbitrary
+// check if the point is contained within any of the polygons.
+// the vertices of a polygon count as contained, which a plain
+// Polygon.ContainsPoint would not do, so ContainsPointClosed is used instead.
+// s2.VertexModelClosed, which it follows, does not resolve points lying on the
+// edges of a polygon, so behaviour there is arbitrary
 func polygonsIntersectsPoint(s2pgns []*s2.Polygon,
 	point *s2.Point) bool {
-	idx := s2.NewShapeIndex()
 	for _, pgn := range s2pgns {
-		if !pgn.PointWithinBound(*point) {
-			continue
+		if pgn.ContainsPointClosed(*point) {
+			return true
 		}
+	}
 
-		// We don't early exit here because the point may be contained
-		// on the vertices of the polygon, which is not considered
-		if small, inside := pgn.SmallPolygonContainsPoint(*point); small {
-			if inside {
+	return false
+}
+
+// segmentCrossesPolygonBoundary reports whether the geodesic segment AB crosses
+// the boundary of the polygon, holes included, at a point interior to both
+// edges. A segment that merely touches the boundary, at a shared vertex for
+// instance, does not cross it.
+//
+// A CrossingEdgeQuery answers the same question through a ShapeIndex, but it
+// resolves the shape it is given through the index it was built over, so it can
+// only be used on a polygon that has been added to that index. Taking the
+// crossings directly costs one pass over the edges and builds nothing.
+func segmentCrossesPolygonBoundary(a, b s2.Point, s2pgn *s2.Polygon) bool {
+	crosser := s2.NewEdgeCrosser(a, b)
+	for _, loop := range s2pgn.Loops() {
+		for i := 0; i < loop.NumEdges(); i++ {
+			edge := loop.Edge(i)
+			if crosser.CrossingSign(edge.V0, edge.V1) == s2.Cross {
 				return true
 			}
 		}
-
-		idx.Add(pgn)
 	}
 
-	if idx.Len() == 0 {
-		return false
-	}
-
-	return s2.NewContainsPointQuery(idx, s2.VertexModelClosed).Contains(*point)
+	return false
 }
 
 func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 	pls []*s2.Polyline) bool {
-	checker := s2.NewCrossingEdgeQuery(s2.NewShapeIndex())
-
 	// Every line segment in every linestring must be
 	// fully contained in atleast one of the polygons
 	for _, pl := range pls {
@@ -135,13 +120,12 @@ func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 
 			contains := false
 			for _, s2pgn := range s2pgns {
-				containsStart := s2pgn.ContainsPoint(start)
-				containsEnd := s2pgn.ContainsPoint(end)
+				containsStart := s2pgn.ContainsPointClosed(start)
+				containsEnd := s2pgn.ContainsPointClosed(end)
 				// check if both end points are contained and if so,
 				// check if the line segment between them crosses the boundary of the polygon
 				if containsStart && containsEnd {
-					crossings := checker.Crossings(start, end, s2pgn, s2.CrossingTypeInterior)
-					if len(crossings) > 0 {
+					if segmentCrossesPolygonBoundary(start, end, s2pgn) {
 						continue
 					}
 					contains = true
@@ -171,6 +155,40 @@ func polygonsContainsLineStrings(s2pgns []*s2.Polygon,
 	}
 
 	return true
+}
+
+// distanceFromPointToPolygonBoundary returns the distance from the point to the
+// nearest edge of the polygon, holes included, without regard to which side of
+// the boundary the point lies on.
+//
+// Polygon.ProjectToBoundary answers this through a ClosestEdgeQuery over the
+// polygon's ShapeIndex, which is worth building only for a polygon that is
+// queried many times. One pass over the edges is cheaper for a polygon that is
+// decoded, measured once and thrown away.
+func distanceFromPointToPolygonBoundary(point s2.Point,
+	s2pgn *s2.Polygon) s1.Angle {
+	distance := s1.InfAngle()
+	for _, loop := range s2pgn.Loops() {
+		for i := 0; i < loop.NumEdges(); i++ {
+			edge := loop.Edge(i)
+			if d := s2.DistanceFromSegment(point, edge.V0,
+				edge.V1); d < distance {
+				distance = d
+			}
+		}
+	}
+
+	return distance
+}
+
+// distanceFromPointToPolygon returns the distance from the point to the polygon,
+// which is zero for a point the polygon contains.
+func distanceFromPointToPolygon(point s2.Point, s2pgn *s2.Polygon) s1.Angle {
+	if s2pgn.ContainsPointClosed(point) {
+		return 0
+	}
+
+	return distanceFromPointToPolygonBoundary(point, s2pgn)
 }
 
 // ------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strings"
 
 	index "github.com/blevesearch/bleve_index_api"
@@ -40,6 +41,22 @@ type GeoShape struct {
 
 	// Center of the circle
 	Center []float64
+}
+
+// readInt32 reads one big-endian int32 from the reader.
+//
+// binary.Read would do the same, but it takes its destination as an interface,
+// which puts that destination on the heap on every call. These counts are read
+// once per collection and once per shape inside a geometry collection, so the
+// allocations add up over a scan. Reading the four bytes by hand allocates
+// nothing.
+func readInt32(r *bytes.Reader) (int32, error) {
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return 0, err
+	}
+
+	return int32(binary.BigEndian.Uint32(buf[:])), nil
 }
 
 // FilterGeoShapesOnRelation extracts the shapes in the document, apply
@@ -76,8 +93,7 @@ func ExtractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *
 		return point, nil
 
 	case MultiPointTypePrefix:
-		var numPoints int32
-		err := binary.Read(*r, binary.BigEndian, &numPoints)
+		numPoints, err := readInt32(*r)
 		if err != nil {
 			return nil, err
 		}
@@ -104,8 +120,7 @@ func ExtractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *
 		return ls, nil
 
 	case MultiLineStringTypePrefix:
-		var numLineStrings int32
-		err := binary.Read(*r, binary.BigEndian, &numLineStrings)
+		numLineStrings, err := readInt32(*r)
 		if err != nil {
 			return nil, err
 		}
@@ -133,8 +148,7 @@ func ExtractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *
 		return pgn, nil
 
 	case MultiPolygonTypePrefix:
-		var numPolygons int32
-		err := binary.Read(*r, binary.BigEndian, &numPolygons)
+		numPolygons, err := readInt32(*r)
 		if err != nil {
 			return nil, err
 		}
@@ -151,16 +165,14 @@ func ExtractShapesFromBytes(targetShapeBytes []byte, r **bytes.Reader, bufPool *
 		return mpgns, nil
 
 	case GeometryCollectionTypePrefix:
-		var numShapes int32
-		err := binary.Read(*r, binary.BigEndian, &numShapes)
+		numShapes, err := readInt32(*r)
 		if err != nil {
 			return nil, err
 		}
 
 		lengths := make([]int32, numShapes)
 		for i := int32(0); i < numShapes; i++ {
-			var length int32
-			err := binary.Read(*r, binary.BigEndian, &length)
+			length, err := readInt32(*r)
 			if err != nil {
 				return nil, err
 			}
