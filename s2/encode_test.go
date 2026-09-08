@@ -142,6 +142,22 @@ const (
 	// RegionUnion - Not yet implemented.
 )
 
+// clearShapeIndex drops the ShapeIndex from a decoded region, so that an
+// encode/decode round trip can be compared on the geometry it carries alone.
+// Decoding deliberately leaves the index unbuilt and builds it on demand, so an
+// index is no longer part of what a decode is expected to produce.
+func clearShapeIndex(r interface{}) {
+	switch v := r.(type) {
+	case *Loop:
+		v.index = nil
+	case *Polygon:
+		v.index = nil
+		for _, l := range v.loops {
+			l.index = nil
+		}
+	}
+}
+
 func TestEncodeDecode(t *testing.T) {
 	cu := CellUnion{}
 	cuFace := CellUnion([]CellID{CellIDFromFace(1)})
@@ -253,6 +269,8 @@ func TestEncodeDecode(t *testing.T) {
 			t.Errorf("decode(%#v): %v", test.reg, err)
 			continue
 		}
+		clearShapeIndex(decoded)
+		clearShapeIndex(test.reg)
 		if !reflect.DeepEqual(decoded, test.reg) {
 			t.Errorf("decode = %#v, want %#v", decoded, test.reg)
 		}
@@ -303,6 +321,8 @@ func TestLoopEncodeDecode(t *testing.T) {
 			t.Errorf("Decode %d: %v", i, err)
 			continue
 		}
+		clearShapeIndex(l)
+		clearShapeIndex(ll)
 		if !reflect.DeepEqual(l, ll) {
 			t.Errorf("encoding roundtrip failed")
 		}

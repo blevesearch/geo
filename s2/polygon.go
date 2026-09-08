@@ -387,8 +387,9 @@ func (p *Polygon) initOneLoop() {
 	p.initEdgesAndIndex()
 }
 
-// initLoopProperties sets the properties for polygons with multiple loops.
-func (p *Polygon) initLoopProperties() {
+// initLoopBounds sets the vertex count, hole flag and bounds of a polygon from
+// its loops. It does not touch the ShapeIndex.
+func (p *Polygon) initLoopBounds() {
 	p.numVertices = 0
 	// the loops depths are set by initNested/initOriented prior to this.
 	p.bound = EmptyRect()
@@ -402,13 +403,17 @@ func (p *Polygon) initLoopProperties() {
 		p.numVertices += l.NumVertices()
 	}
 	p.subregionBound = ExpandForSubregions(p.bound)
+}
 
+// initLoopProperties sets the properties for polygons with multiple loops.
+func (p *Polygon) initLoopProperties() {
+	p.initLoopBounds()
 	p.initEdgesAndIndex()
 }
 
-// initEdgesAndIndex performs the shape related initializations and adds the final
-// polygon to the index.
-func (p *Polygon) initEdgesAndIndex() {
+// initEdges counts the polygon's edges and lays out the lookup table that maps
+// an edge to the loop it belongs to. It does not touch the ShapeIndex.
+func (p *Polygon) initEdges() {
 	p.numEdges = 0
 	p.cumulativeEdges = nil
 	if p.IsFull() {
@@ -425,9 +430,44 @@ func (p *Polygon) initEdgesAndIndex() {
 		}
 		p.numEdges += len(l.vertices)
 	}
+}
+
+// initEdgesAndIndex performs the shape related initializations and adds the final
+// polygon to the index.
+func (p *Polygon) initEdgesAndIndex() {
+	p.initEdges()
+	if p.IsFull() {
+		return
+	}
 
 	p.index = NewShapeIndex()
 	p.index.Add(p)
+}
+
+// shapeIndex returns the polygon's ShapeIndex, creating it if the polygon was
+// decoded rather than constructed. Decoding leaves the index unbuilt because a
+// decoded polygon is usually measured against a handful of points and then
+// thrown away, and the queries that do that never consult the index.
+//
+// A polygon that reaches here has been decoded, and a decoded polygon belongs to
+// the goroutine that decoded it, so no synchronization is needed. Polygons that
+// are constructed, which are the ones that get shared, have their index built by
+// initEdgesAndIndex before any sharing can happen.
+func (p *Polygon) shapeIndex() *ShapeIndex {
+	if p.index == nil {
+		p.index = NewShapeIndex()
+		p.index.Add(p)
+	}
+
+	return p.index
+}
+
+// indexIsFresh reports whether the polygon has an index with no updates left to
+// apply. An index that has not been created yet is not fresh: like an index with
+// pending updates, it still has work outstanding that a caller may be able to
+// avoid.
+func (p *Polygon) indexIsFresh() bool {
+	return p.index != nil && p.index.IsFresh()
 }
 
 // FullPolygon returns a special "full" polygon.
@@ -599,14 +639,14 @@ func (p *Polygon) ContainsPoint(point Point) bool {
 
 	// NOTE: A bounds check slows down this function by about 50%. It is
 	// worthwhile only when it might allow us to delay building the index.
-	if (p.index == nil || !p.index.IsFresh()) && !p.bound.ContainsPoint(point) {
+	if !p.indexIsFresh() && !p.bound.ContainsPoint(point) {
 		return false
 	}
 
-	// For small polygons, and during initial construction, it is faster to just
-	// check all the crossing.
+	// For small polygons it is faster to just check all the crossings. Larger
+	// ones are worth the index, which is built here if the polygon was decoded.
 	const maxBruteForceVertices = 32
-	if p.numVertices < maxBruteForceVertices || p.index == nil {
+	if p.numVertices < maxBruteForceVertices {
 		inside := false
 		for _, l := range p.loops {
 			// use loops bruteforce to avoid building the index on each loop.
@@ -616,7 +656,7 @@ func (p *Polygon) ContainsPoint(point Point) bool {
 	}
 
 	// Otherwise we look up the ShapeIndex cell containing this point.
-	return NewContainsPointQuery(p.index, VertexModelSemiOpen).Contains(point)
+	return NewContainsPointQuery(p.shapeIndex(), VertexModelSemiOpen).Contains(point)
 }
 
 // Check whether the point is within the bounds of the polygon.
@@ -629,7 +669,7 @@ func (p *Polygon) PointWithinBound(point Point) bool {
 // Does not consider vertices of the polygon
 func (p *Polygon) SmallPolygonContainsPoint(point Point) (bool, bool) {
 	const maxBruteForceVertices = 32
-	if p.numVertices < maxBruteForceVertices || p.index == nil {
+	if p.numVertices < maxBruteForceVertices {
 		inside := false
 		for _, l := range p.loops {
 			inside = inside != l.bruteForceContainsPoint(point)
@@ -640,9 +680,56 @@ func (p *Polygon) SmallPolygonContainsPoint(point Point) (bool, bool) {
 	return false, false
 }
 
+// ContainsPointClosed reports whether the polygon contains the point, counting
+// the vertices of the polygon as inside it.
+//
+// It never builds or queries a ShapeIndex, so nothing is allocated beyond the
+// edge crossers themselves. That makes it the cheaper choice whenever a polygon
+// is decoded, tested against a handful of points and then thrown away, which is
+// what a search over stored shapes does. A polygon that is tested against many
+// points is better served by a ContainsPointQuery over an index that is built
+// once and reused, from around fifty points upwards.
+//
+// A point that lies in the interior of an edge rather than on a vertex is no
+// better resolved here than it is by a ContainsPointQuery under
+// VertexModelClosed: in both cases the answer is whatever the crossing count
+// works out to.
+func (p *Polygon) ContainsPointClosed(point Point) bool {
+	if p.IsFull() {
+		return true
+	}
+
+	if !p.bound.ContainsPoint(point) {
+		return false
+	}
+
+	// The point is inside the polygon when an odd number of its loops contain
+	// it, which is what makes a point inside a hole come out as outside. A loop
+	// whose bound excludes the point cannot contain it, and so cannot change
+	// that count.
+	inside := false
+	for _, l := range p.loops {
+		if !l.bound.ContainsPoint(point) {
+			continue
+		}
+
+		// The crossing count taken below is not defined at a vertex, so the
+		// vertices are answered ahead of it.
+		for i := range l.vertices {
+			if l.vertices[i] == point {
+				return true
+			}
+		}
+
+		inside = inside != l.bruteForceContainsPoint(point)
+	}
+
+	return inside
+}
+
 // ContainsCell reports whether the polygon contains the given cell.
 func (p *Polygon) ContainsCell(cell Cell) bool {
-	it := p.index.Iterator()
+	it := p.shapeIndex().Iterator()
 	relation := it.LocateCellID(cell.ID())
 
 	// If "cell" is disjoint from all index cells, it is not contained.
@@ -666,7 +753,7 @@ func (p *Polygon) ContainsCell(cell Cell) bool {
 
 // IntersectsCell reports whether the polygon intersects the given cell.
 func (p *Polygon) IntersectsCell(cell Cell) bool {
-	it := p.index.Iterator()
+	it := p.shapeIndex().Iterator()
 	relation := it.LocateCellID(cell.ID())
 
 	// If cell does not overlap any index cell, there is no intersection.
@@ -1212,7 +1299,7 @@ func (p *Polygon) decode(d *decoder) {
 		return
 	}
 	p.subregionBound = ExpandForSubregions(p.bound)
-	p.initEdgesAndIndex()
+	p.initEdges()
 }
 
 func (p *Polygon) decodeCompressed(d *decoder) {
@@ -1233,7 +1320,8 @@ func (p *Polygon) decodeCompressed(d *decoder) {
 		p.loops[i] = new(Loop)
 		p.loops[i].decodeCompressed(d, snapLevel)
 	}
-	p.initLoopProperties()
+	p.initLoopBounds()
+	p.initEdges()
 }
 
 func (p *Polygon) Project(point *Point) Point {
@@ -1244,12 +1332,12 @@ func (p *Polygon) Project(point *Point) Point {
 }
 
 func (p *Polygon) ProjectToBoundary(point *Point) Point {
-	if p.index == nil || p.NumEdges() == 0 {
+	if p.NumEdges() == 0 {
 		return *point
 	}
 
 	options := NewClosestEdgeQueryOptions().MaxResults(1).IncludeInteriors(false)
-	q := NewClosestEdgeQuery(p.index, options)
+	q := NewClosestEdgeQuery(p.shapeIndex(), options)
 	target := NewMinDistanceToPointTarget(*point)
 	edges := q.FindEdges(target)
 	if len(edges) == 0 {
