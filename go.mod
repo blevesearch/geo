@@ -7,7 +7,7 @@ go 1.24
 toolchain go1.24.0
 
 require (
-	github.com/blevesearch/bleve_index_api v1.4.1-0.20260729060817-8e56340f2a7e
+	github.com/blevesearch/bleve_index_api v1.4.1
 	github.com/google/go-cmp v0.7.0
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede
 )
