@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,7 @@ func (pg *Polygon) Type() string {
 }
 
 func (pg *Polygon) Value() ([]byte, error) {
-	return jsoniter.Marshal(pg)
+	return json.Marshal(pg)
 }
 
 func (pg *Polygon) Marshal() ([]byte, error) {
@@ -162,7 +163,7 @@ func (mp *MultiPolygon) Type() string {
 }
 
 func (mp *MultiPolygon) Value() ([]byte, error) {
-	return jsoniter.Marshal(mp)
+	return json.Marshal(mp)
 }
 
 func (mp *MultiPolygon) Marshal() ([]byte, error) {

@@ -17,15 +17,13 @@ package geojson
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	index "github.com/blevesearch/bleve_index_api"
 	"github.com/blevesearch/geo/s2"
-	jsoniterator "github.com/json-iterator/go"
 )
-
-var jsoniter = jsoniterator.ConfigCompatibleWithStandardLibrary
 
 type GeoShape struct {
 	// Type of the shape
@@ -236,7 +234,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 	var tmp struct {
 		Typ string `json:"type"`
 	}
-	err := jsoniter.Unmarshal(input, &tmp)
+	err := json.Unmarshal(input, &tmp)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +244,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 	switch sType {
 	case PolygonType:
 		var rv Polygon
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +253,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case MultiPolygonType:
 		var rv MultiPolygon
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -264,7 +262,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case PointType:
 		var rv Point
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +271,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case MultiPointType:
 		var rv MultiPoint
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -282,7 +280,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case LineStringType:
 		var rv LineString
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +289,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case MultiLineStringType:
 		var rv MultiLineString
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +298,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case GeometryCollectionType:
 		var rv GeometryCollection
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +306,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case CircleType:
 		var rv Circle
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +315,7 @@ func ParseGeoJSONShape(input []byte) (index.GeoJSON, error) {
 
 	case EnvelopeType:
 		var rv Envelope
-		err := jsoniter.Unmarshal(input, &rv)
+		err := json.Unmarshal(input, &rv)
 		if err != nil {
 			return nil, err
 		}

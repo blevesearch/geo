@@ -17,6 +17,7 @@ package geojson
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -44,7 +45,7 @@ func (e *Envelope) Type() string {
 }
 
 func (e *Envelope) Value() ([]byte, error) {
-	return jsoniter.Marshal(e)
+	return json.Marshal(e)
 }
 
 func (e *Envelope) init() {
