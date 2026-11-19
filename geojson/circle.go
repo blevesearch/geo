@@ -17,6 +17,7 @@ package geojson
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ func (c *Circle) Type() string {
 }
 
 func (c *Circle) Value() ([]byte, error) {
-	return jsoniter.Marshal(c)
+	return json.Marshal(c)
 }
 
 func (c *Circle) init() {
@@ -98,7 +99,7 @@ func (c *Circle) UnmarshalJSON(data []byte) error {
 		Radius   string    `json:"radius"`
 	}{}
 
-	err := jsoniter.Unmarshal(data, &tmp)
+	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}

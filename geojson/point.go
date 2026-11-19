@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -45,7 +46,7 @@ func (p *Point) Type() string {
 }
 
 func (p *Point) Value() ([]byte, error) {
-	return jsoniter.Marshal(p)
+	return json.Marshal(p)
 }
 
 func (p *Point) init() {
@@ -181,7 +182,7 @@ func (mp *MultiPoint) Type() string {
 }
 
 func (mp *MultiPoint) Value() ([]byte, error) {
-	return jsoniter.Marshal(mp)
+	return json.Marshal(mp)
 }
 
 func (mp *MultiPoint) Intersects(other index.GeoJSON) (bool, error) {

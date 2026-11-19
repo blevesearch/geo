@@ -38,7 +38,7 @@ func (gc *GeometryCollection) Type() string {
 }
 
 func (gc *GeometryCollection) Value() ([]byte, error) {
-	return jsoniter.Marshal(gc)
+	return json.Marshal(gc)
 }
 
 func (gc *GeometryCollection) Members() []index.GeoJSON {
@@ -216,7 +216,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 		Shapes []json.RawMessage `json:"geometries"`
 	}{}
 
-	err := jsoniter.Unmarshal(data, &tmp)
+	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 	for _, shape := range tmp.Shapes {
 		var t map[string]interface{}
-		err := jsoniter.Unmarshal(shape, &t)
+		err := json.Unmarshal(shape, &t)
 		if err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 		switch typ {
 		case PointType:
 			var p Point
-			err := jsoniter.Unmarshal(shape, &p)
+			err := json.Unmarshal(shape, &p)
 			if err != nil {
 				return err
 			}
@@ -249,7 +249,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 		case MultiPointType:
 			var mp MultiPoint
-			err := jsoniter.Unmarshal(shape, &mp)
+			err := json.Unmarshal(shape, &mp)
 			if err != nil {
 				return err
 			}
@@ -258,7 +258,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 		case LineStringType:
 			var ls LineString
-			err := jsoniter.Unmarshal(shape, &ls)
+			err := json.Unmarshal(shape, &ls)
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 		case MultiLineStringType:
 			var mls MultiLineString
-			err := jsoniter.Unmarshal(shape, &mls)
+			err := json.Unmarshal(shape, &mls)
 			if err != nil {
 				return err
 			}
@@ -276,7 +276,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 		case PolygonType:
 			var pgn Polygon
-			err := jsoniter.Unmarshal(shape, &pgn)
+			err := json.Unmarshal(shape, &pgn)
 			if err != nil {
 				return err
 			}
@@ -285,7 +285,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 
 		case MultiPolygonType:
 			var pgn MultiPolygon
-			err := jsoniter.Unmarshal(shape, &pgn)
+			err := json.Unmarshal(shape, &pgn)
 			if err != nil {
 				return err
 			}
@@ -293,7 +293,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 			gc.Shapes = append(gc.Shapes, &pgn)
 		case CircleType:
 			var cir Circle
-			err := jsoniter.Unmarshal(shape, &cir)
+			err := json.Unmarshal(shape, &cir)
 			if err != nil {
 				return err
 			}
@@ -301,7 +301,7 @@ func (gc *GeometryCollection) UnmarshalJSON(data []byte) error {
 			gc.Shapes = append(gc.Shapes, &cir)
 		case EnvelopeType:
 			var env Envelope
-			err := jsoniter.Unmarshal(shape, &env)
+			err := json.Unmarshal(shape, &env)
 			if err != nil {
 				return err
 			}

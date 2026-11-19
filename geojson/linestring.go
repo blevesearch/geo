@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -55,7 +56,7 @@ func (ls *LineString) Type() string {
 }
 
 func (ls *LineString) Value() ([]byte, error) {
-	return jsoniter.Marshal(ls)
+	return json.Marshal(ls)
 }
 
 func (ls *LineString) Marshal() ([]byte, error) {
@@ -155,7 +156,7 @@ func (mls *MultiLineString) Type() string {
 }
 
 func (mls *MultiLineString) Value() ([]byte, error) {
-	return jsoniter.Marshal(mls)
+	return json.Marshal(mls)
 }
 
 func (mls *MultiLineString) Marshal() ([]byte, error) {
